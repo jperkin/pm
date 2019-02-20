@@ -1,0 +1,20 @@
+[package]
+name = "pm"
+version = "0.1.0"
+authors = ["Jonathan Perkin <jonathan@perkin.org.uk>"]
+edition = "2018"
+
+[dependencies]
+chrono = "*"
+httpdate = "*"
+dirs = "*"
+getopts = "*"
+libarchive = "*"
+reqwest = "*"
+walkdir = "*"
+serde = "*"
+serde_derive = "*"
+structopt = "*"
+toml = "*"
+rusqlite = "*"
+filetime = "*"
