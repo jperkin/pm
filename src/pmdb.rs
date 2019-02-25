@@ -18,6 +18,7 @@
 
 extern crate rusqlite;
 
+use crate::summary::SummaryEntry;
 use rusqlite::Connection;
 
 #[derive(Debug)]
@@ -37,6 +38,11 @@ pub struct Repository {
 impl PMDB {
     pub fn new(p: &std::path::Path) -> rusqlite::Result<PMDB> {
         let c = Connection::open(p)?;
+        /*
+         * pkgin plays rather fast and loose with the database, let's try
+         * instead going the other way and making it as safe as possible.
+         */
+        c.execute("PRAGMA synchronous = EXTRA;", rusqlite::NO_PARAMS)?;
         Ok(PMDB {
             conn: c,
             repositories: Vec::new(),
@@ -76,6 +82,26 @@ impl PMDB {
                 summary_suffix      TEXT,
                 mtime               INTEGER
             );
+            CREATE TABLE remote_pkg (
+                id                  INTEGER PRIMARY KEY,
+                repository_id       INTEGER,
+                build_date          TEXT,
+                categories          TEXT,
+                comment             TEXT,
+                description         TEXT,
+                file_size           INTEGER,
+                fullpkgname         TEXT,
+                homepage            TEXT NULL,
+                license             TEXT NULL,
+                opsys               TEXT,
+                os_version          TEXT,
+                pkg_options         TEXT NULL,
+                pkgname             TEXT,
+                pkgpath             TEXT,
+                pkgtools_version    TEXT,
+                pkgversion          TEXT,
+                size_pkg            INTEGER
+            );
             ",
         )?;
         tx.commit()
@@ -105,40 +131,133 @@ impl PMDB {
         }
     }
 
-    pub fn create_repository(
-        &self,
+    fn insert_remote_pkgs(
+        tx: &rusqlite::Transaction,
+        repo_id: &i64,
+        pkgs: &[SummaryEntry],
+    ) -> rusqlite::Result<()> {
+        let mut stmt = tx.prepare(
+            "INSERT INTO remote_pkg
+                         (repository_id, build_date, categories, comment,
+                          description, file_size, fullpkgname, homepage,
+                          license, opsys, os_version, pkg_options, pkgname,
+                          pkgpath, pkgtools_version, pkgversion, size_pkg)
+                  VALUES (:repo_id, :build_date, :categories, :comment,
+                          :description, :file_size, :fullpkgname,
+                          :homepage, :license, :opsys, :os_version,
+                          :pkg_options, :pkgname, :pkgpath,
+                          :pkgtools_version, :pkgversion, :size_pkg)",
+        )?;
+
+        for p in pkgs {
+            /*
+             * These values have all been checked earlier when inserted so
+             * we are safe to unwrap.
+             */
+            stmt.execute_named(&[
+                (":repo_id", &repo_id),
+                (":build_date", &p.build_date()),
+                (":categories", &p.categories().join(" ")),
+                (":comment", &p.comment()),
+                (":description", &p.description().join("\n")),
+                (":file_size", &(p.file_size().unwrap())),
+                (":fullpkgname", &p.fullpkgname()),
+                (":homepage", &p.homepage()),
+                (":license", &p.license()),
+                (":opsys", &p.opsys()),
+                (":os_version", &p.os_version()),
+                (":pkg_options", &p.pkg_options()),
+                (":pkgname", &p.pkgname()),
+                (":pkgpath", &p.pkgpath()),
+                (":pkgtools_version", &p.pkgtools_version()),
+                (":pkgversion", &p.pkgversion()),
+                (":size_pkg", &(p.size_pkg().unwrap())),
+            ])?;
+        }
+
+        Ok(())
+    }
+
+    fn delete_remote_pkgs(
+        tx: &rusqlite::Transaction,
+        repo_id: &i64,
+    ) -> rusqlite::Result<usize> {
+        let mut stmt = tx.prepare(
+            "DELETE
+               FROM remote_pkg
+              WHERE repository_id = :repo_id",
+        )?;
+        stmt.execute_named(&[(":repo_id", &repo_id)])
+    }
+
+    pub fn insert_repository(
+        &mut self,
         url: &str,
         mtime: i64,
         summary_suffix: &str,
-    ) -> rusqlite::Result<usize> {
-        let mut stmt = self.conn.prepare(
-            "INSERT INTO repositories (url, mtime, summary_suffix)
-                  VALUES (:url, :mtime, :summary_suffix)",
-        )?;
-        stmt.execute_named(&[
-            (":url", &url),
-            (":mtime", &mtime),
-            (":summary_suffix", &summary_suffix),
-        ])
+        pkgs: &[SummaryEntry],
+    ) -> rusqlite::Result<()> {
+        let tx = self.conn.transaction()?;
+
+        {
+            let mut stmt = tx.prepare(
+                "INSERT INTO repositories
+                             (url, mtime, summary_suffix)
+                      VALUES (:url, :mtime, :summary_suffix)",
+            )?;
+            stmt.execute_named(&[
+                (":url", &url),
+                (":mtime", &mtime),
+                (":summary_suffix", &summary_suffix),
+            ])?;
+
+            let repo_id = tx.last_insert_rowid();
+            PMDB::insert_remote_pkgs(&tx, &repo_id, &pkgs)?;
+        }
+
+        tx.commit()
     }
 
     pub fn update_repository(
-        &self,
+        &mut self,
         url: &str,
         mtime: i64,
         summary_suffix: &str,
-    ) -> rusqlite::Result<usize> {
-        let mut stmt = self.conn.prepare(
-            "UPDATE repositories
-                SET mtime = :mtime,
-                    summary_suffix = :summary_suffix
-              WHERE url = :url",
-        )?;
-        stmt.execute_named(&[
-            (":url", &url),
-            (":mtime", &mtime),
-            (":summary_suffix", &summary_suffix),
-        ])
+        pkgs: &[SummaryEntry],
+    ) -> rusqlite::Result<()> {
+        let tx = self.conn.transaction()?;
+
+        {
+            let repo_id = tx.query_row_named(
+                "SELECT id
+                   FROM repositories
+                  WHERE url = :url",
+                &[(":url", &url)],
+                |row| row.get(0),
+            )?;
+
+            /*
+             * Trying to update a repository in-place would just be a
+             * nightmare.  Dropping and re-inserting is a lot simpler and
+             * faster.
+             */
+            PMDB::delete_remote_pkgs(&tx, &repo_id)?;
+            PMDB::insert_remote_pkgs(&tx, &repo_id, &pkgs)?;
+
+            let mut stmt = tx.prepare(
+                "UPDATE repositories
+                    SET mtime = :mtime,
+                        summary_suffix = :summary_suffix
+                  WHERE url = :url",
+            )?;
+            stmt.execute_named(&[
+                (":mtime", &mtime),
+                (":summary_suffix", &summary_suffix),
+                (":url", &url),
+            ])?;
+        }
+
+        tx.commit()
     }
 }
 

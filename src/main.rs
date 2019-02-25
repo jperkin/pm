@@ -18,15 +18,18 @@
 
 mod config;
 mod pmdb;
+mod summary;
 
+extern crate bzip2;
 extern crate chrono;
+extern crate flate2;
 extern crate httpdate;
-extern crate libarchive;
 extern crate rusqlite;
 extern crate structopt;
-extern crate walkdir;
+extern crate xz2;
 
-use pmdb::PMDB;
+use crate::pmdb::PMDB;
+use crate::summary::SummaryStream;
 use std::time::SystemTime;
 use structopt::StructOpt;
 
@@ -82,13 +85,13 @@ fn main() -> Result<(), Box<std::error::Error>> {
              * there is a way to do this in one match statement, but I can't
              * get past various issues when trying to return a vec!
              */
-            let mut sumext = vec!["xz", "bz2", "gz"];
+            let mut summary_extensions = vec!["xz", "bz2", "gz"];
 
             if let Some(ext) = repo.summary_extension() {
-                sumext = vec![ext];
+                summary_extensions = vec![ext];
             }
 
-            for e in sumext {
+            for e in summary_extensions {
                 if verbose {
                     println!("Trying summary_suffix={}", e);
                 }
@@ -96,13 +99,14 @@ fn main() -> Result<(), Box<std::error::Error>> {
                 let sumurl = format!("{}/{}.{}", repo.url(), "pkg_summary", e);
 
                 let res =
-                    reqwest::Client::head(&client, sumurl.as_str()).send()?;
+                    reqwest::Client::get(&client, sumurl.as_str()).send()?;
 
                 /* Not found, try next pkg_summary extension */
                 if !res.status().is_success() {
                     continue;
                 }
 
+                /* XXX: this seems overly verbose, no simpler way? */
                 let last_modified: i64 = if let Some(lm) =
                     res.headers().get(reqwest::header::LAST_MODIFIED)
                 {
@@ -115,24 +119,35 @@ fn main() -> Result<(), Box<std::error::Error>> {
                 };
 
                 /*
-                 * We have a valid pkg_summary, check DB for existing entry
+                 * We now have a valid pkg_summary, check DB for existing entry
                  * and insert/update as appropriate.
                  */
+                let mut sumstr = SummaryStream::new();
+
                 if let Some(r) = db.get_repository(repo.url())? {
                     if r.up_to_date(last_modified, e) {
                         println!("{} is up to date", repo.url());
                     } else {
                         println!("Updating {}", repo.url());
-                        db.update_repository(repo.url(), last_modified, e)?;
+                        sumstr.slurp(&e, res)?;
+                        sumstr.parse();
+                        db.update_repository(
+                            repo.url(),
+                            last_modified,
+                            e,
+                            sumstr.entries(),
+                        )?;
                     }
                 } else {
                     println!("Creating {}", repo.url());
-                    db.create_repository(repo.url(), last_modified, e)?;
-                }
-
-                if verbose {
-                    println!("Configured {}", repo.url());
-                    println!("{:#?}", repo);
+                    sumstr.slurp(&e, res)?;
+                    sumstr.parse();
+                    db.insert_repository(
+                        repo.url(),
+                        last_modified,
+                        e,
+                        sumstr.entries(),
+                    )?;
                 }
 
                 /* We're done, skip remaining suffixes */
