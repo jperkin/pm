@@ -53,7 +53,7 @@ impl PMDB {
         }
 
         Ok(PMDB {
-            db: db,
+            db,
             repositories: Vec::new(),
         })
     }
@@ -142,7 +142,7 @@ impl PMDB {
 
     fn insert_remote_pkgs(
         tx: &rusqlite::Transaction,
-        repo_id: &i64,
+        repo_id: i64,
         pkgs: &[SummaryEntry],
     ) -> rusqlite::Result<()> {
         let mut stmt = tx.prepare(
@@ -189,7 +189,7 @@ impl PMDB {
 
     fn delete_remote_pkgs(
         tx: &rusqlite::Transaction,
-        repo_id: &i64,
+        repo_id: i64,
     ) -> rusqlite::Result<usize> {
         let mut stmt = tx.prepare(
             "DELETE
@@ -221,7 +221,7 @@ impl PMDB {
             ])?;
 
             let repo_id = tx.last_insert_rowid();
-            PMDB::insert_remote_pkgs(&tx, &repo_id, &pkgs)?;
+            PMDB::insert_remote_pkgs(&tx, repo_id, &pkgs)?;
         }
 
         tx.commit()
@@ -250,8 +250,8 @@ impl PMDB {
              * nightmare.  Dropping and re-inserting is a lot simpler and
              * faster.
              */
-            PMDB::delete_remote_pkgs(&tx, &repo_id)?;
-            PMDB::insert_remote_pkgs(&tx, &repo_id, &pkgs)?;
+            PMDB::delete_remote_pkgs(&tx, repo_id)?;
+            PMDB::insert_remote_pkgs(&tx, repo_id, &pkgs)?;
 
             let mut stmt = tx.prepare(
                 "UPDATE repositories
