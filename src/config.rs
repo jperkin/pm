@@ -60,6 +60,13 @@ impl Config {
 
     pub fn load_default() -> Result<Config, std::io::Error> {
         let default_config = dirs::config_dir().unwrap().join("pm.toml");
+        if !default_config.exists() {
+            eprintln!(
+                "ERROR: Default configuration file {} does not exist",
+                default_config.display()
+            );
+            std::process::exit(1);
+        }
         let mut config_file = File::open(default_config)?;
         let mut config_str = String::new();
         config_file.read_to_string(&mut config_str)?;

@@ -20,6 +20,7 @@ extern crate rusqlite;
 
 use crate::summary::SummaryEntry;
 use rusqlite::Connection;
+use std::fs;
 
 #[derive(Debug)]
 pub struct PMDB {
@@ -41,6 +42,10 @@ impl PMDB {
      * prior to returning.
      */
     pub fn new(p: &std::path::Path) -> rusqlite::Result<PMDB> {
+        fs::create_dir_all(
+            p.parent().expect("Could not determine database path"),
+        )
+        .expect("Could not create database directory");
         let mut db = Connection::open(p)?;
         /*
          * pkgin plays rather fast and loose with the database, let's try
