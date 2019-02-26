@@ -23,7 +23,7 @@ use rusqlite::Connection;
 
 #[derive(Debug)]
 pub struct PMDB {
-    conn: Connection,
+    db: Connection,
     repositories: Vec<Repository>,
 }
 
@@ -36,15 +36,24 @@ pub struct Repository {
 }
 
 impl PMDB {
+    /*
+     * Open a new connection to the database and perform any necessary setup
+     * prior to returning.
+     */
     pub fn new(p: &std::path::Path) -> rusqlite::Result<PMDB> {
-        let c = Connection::open(p)?;
+        let mut db = Connection::open(p)?;
         /*
          * pkgin plays rather fast and loose with the database, let's try
          * instead going the other way and making it as safe as possible.
          */
-        c.execute("PRAGMA synchronous = EXTRA;", rusqlite::NO_PARAMS)?;
+        db.execute("PRAGMA synchronous = EXTRA;", rusqlite::NO_PARAMS)?;
+
+        if !PMDB::is_created(&db)? {
+            PMDB::create_default_tables(&mut db)?;
+        }
+
         Ok(PMDB {
-            conn: c,
+            db: db,
             repositories: Vec::new(),
         })
     }
@@ -53,8 +62,8 @@ impl PMDB {
      * Test for the existance of the "repositories" table to determine if we
      * need to create the initial set of tables or not.
      */
-    pub fn is_created(&self) -> rusqlite::Result<bool> {
-        let count: i64 = self.conn.query_row(
+    fn is_created(db: &Connection) -> rusqlite::Result<bool> {
+        let count: i64 = db.query_row(
             "SELECT COUNT(*)
                FROM sqlite_master
               WHERE type='table'
@@ -72,8 +81,8 @@ impl PMDB {
      * XXX: I don't understand why using a transaction means I'm forced to
      * make the whole thing mutable, would prefer to avoid that.
      */
-    pub fn create_default_tables(&mut self) -> rusqlite::Result<()> {
-        let tx = self.conn.transaction()?;
+    pub fn create_default_tables(db: &mut Connection) -> rusqlite::Result<()> {
+        let tx = db.transaction()?;
         tx.execute_batch(
             "
             CREATE TABLE repositories (
@@ -111,7 +120,7 @@ impl PMDB {
         &self,
         url: &str,
     ) -> rusqlite::Result<Option<Repository>> {
-        let mut stmt = self.conn.prepare(
+        let mut stmt = self.db.prepare(
             "SELECT mtime, summary_suffix
                FROM repositories
               WHERE url = ?",
@@ -197,7 +206,7 @@ impl PMDB {
         summary_suffix: &str,
         pkgs: &[SummaryEntry],
     ) -> rusqlite::Result<()> {
-        let tx = self.conn.transaction()?;
+        let tx = self.db.transaction()?;
 
         {
             let mut stmt = tx.prepare(
@@ -225,7 +234,7 @@ impl PMDB {
         summary_suffix: &str,
         pkgs: &[SummaryEntry],
     ) -> rusqlite::Result<()> {
-        let tx = self.conn.transaction()?;
+        let tx = self.db.transaction()?;
 
         {
             let repo_id = tx.query_row_named(

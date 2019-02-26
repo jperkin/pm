@@ -28,6 +28,7 @@ extern crate rusqlite;
 extern crate structopt;
 extern crate xz2;
 
+use crate::config::Config;
 use crate::pmdb::PMDB;
 use crate::summary::SummaryStream;
 use std::time::SystemTime;
@@ -55,24 +56,12 @@ enum SubCmd {
     Update,
 }
 
-fn main() -> Result<(), Box<std::error::Error>> {
-    let cmd = OptArgs::from_args();
-    match cmd.subcmd {
-        SubCmd::Update => {}
-    };
-
-    let pmdb_file = dirs::data_dir().unwrap().join("pm.db");
-    let mut db = PMDB::new(&pmdb_file)?;
-
-    if !db.is_created()? {
-        db.create_default_tables()?;
-    }
-
-    let cfg = config::Config::load_default()?;
+fn update(
+    verbose: bool,
+    cfg: &Config,
+    db: &mut PMDB,
+) -> Result<(), Box<std::error::Error>> {
     let client = reqwest::Client::new();
-
-    /* Command line --verbose overrides config file */
-    let verbose = cmd.verbose || cfg.verbose();
 
     /*
      * Get pkg_summary from each repository and check Last-Modified against
@@ -155,6 +144,23 @@ fn main() -> Result<(), Box<std::error::Error>> {
             }
         }
     }
+
+    Ok(())
+}
+
+fn main() -> Result<(), Box<std::error::Error>> {
+    let cmd = OptArgs::from_args();
+    let cfg = Config::load_default()?;
+
+    let pmdb_file = dirs::data_dir().unwrap().join("pm.db");
+    let mut db = PMDB::new(&pmdb_file)?;
+
+    /* Command line --verbose overrides config file */
+    let verbose = cmd.verbose || cfg.verbose();
+
+    match cmd.subcmd {
+        SubCmd::Update => update(verbose, &cfg, &mut db)?,
+    };
 
     Ok(())
 }
