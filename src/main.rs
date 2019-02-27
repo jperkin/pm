@@ -56,6 +56,20 @@ enum SubCmd {
     Update,
 }
 
+/*
+ * Return a list of pkg_summary extensions to search for in the remote
+ * repository.  Use the user's chosen value if specified in the config,
+ * otherwise use the default list which is ordered by compression size,
+ * best to worst.  First match on the remote end wins.
+ */
+fn get_summary_extensions(repo: &config::RepoConfig) -> Vec<&str> {
+    if let Some(extension) = repo.summary_extension() {
+        vec![extension]
+    } else {
+        vec!["xz", "bz2", "gz"]
+    }
+}
+
 fn update(
     verbose: bool,
     cfg: &Config,
@@ -69,16 +83,7 @@ fn update(
      */
     if let Some(repos) = cfg.repositories() {
         for repo in repos {
-            /*
-             * Start with the default set of extensions.  XXX: presumably
-             * there is a way to do this in one match statement, but I can't
-             * get past various issues when trying to return a vec!
-             */
-            let mut summary_extensions = vec!["xz", "bz2", "gz"];
-
-            if let Some(ext) = repo.summary_extension() {
-                summary_extensions = vec![ext];
-            }
+            let summary_extensions = get_summary_extensions(&repo);
 
             for e in summary_extensions {
                 if verbose {
