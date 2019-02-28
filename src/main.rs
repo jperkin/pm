@@ -16,6 +16,7 @@
  * pm(1) - a package manager for pkgsrc
  */
 
+mod avail;
 mod config;
 mod pmdb;
 mod summary;
@@ -50,6 +51,12 @@ struct OptArgs {
 
 #[derive(Debug, StructOpt)]
 enum SubCmd {
+    #[structopt(
+        name = "avail",
+        alias = "av",
+        about = "List available packages"
+    )]
+    Avail,
     #[structopt(
         name = "update",
         alias = "up",
@@ -162,12 +169,12 @@ fn update(
  */
 fn valid_prefix_or_errx(prefix: &Option<String>) -> &str {
     match prefix {
-        Some(v) => return v.as_str(),
+        Some(v) => v.as_str(),
         None => {
             eprintln!("ERROR: No prefix configured");
             std::process::exit(1);
         }
-    };
+    }
 }
 
 fn main() -> Result<(), Box<std::error::Error>> {
@@ -192,6 +199,9 @@ fn main() -> Result<(), Box<std::error::Error>> {
     let verbose = cmd.verbose || cfg.verbose();
 
     match cmd.subcmd {
+        SubCmd::Avail => {
+            avail::run(&mut db, valid_prefix_or_errx(&prefix))?;
+        }
         SubCmd::Update => update(verbose, &cfg, &mut db)?,
     };
 

@@ -308,7 +308,7 @@ impl SummaryStream {
     pub fn parse(&mut self) {
         let allsum = match std::str::from_utf8(&self.buf) {
             Ok(s) => s,
-            Err(_) => panic!("Err parse"),
+            _ => panic!("Err parse"),
         };
         let v: Vec<&str> = allsum.split_terminator("\n\n").collect();
         for sum_entry in v {

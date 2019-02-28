@@ -18,6 +18,7 @@
 
 extern crate rusqlite;
 
+use crate::avail::AvailablePackage;
 use crate::summary::SummaryEntry;
 use rusqlite::Connection;
 use std::fs;
@@ -276,6 +277,34 @@ impl PMDB {
         }
 
         tx.commit()
+    }
+
+    /*
+     * Support functions for "avail".
+     */
+    pub fn get_remote_pkgs_by_prefix(
+        &mut self,
+        prefix: &str,
+    ) -> rusqlite::Result<Vec<AvailablePackage>> {
+        let mut result = Vec::new();
+        let mut stmt = self.db.prepare(
+            "
+                SELECT fullpkgname, comment
+                  FROM remote_pkg
+            INNER JOIN repositories
+                    ON repositories.id = remote_pkg.repository_id
+                 WHERE repositories.prefix = :prefix",
+        )?;
+        let rows = stmt.query_map_named(&[(":prefix", &prefix)], |row| {
+            AvailablePackage {
+                pkgname: row.get(0),
+                comment: row.get(1),
+            }
+        })?;
+        for row in rows {
+            result.push(row?)
+        }
+        Ok(result)
     }
 }
 
