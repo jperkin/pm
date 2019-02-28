@@ -17,12 +17,12 @@ Enhancements compared to pkgin:
   pkg\_summary(5) bug on SmartOS).
 * Significantly faster!  pm(1) may use a bit more memory than pkgin but
   delivers a much faster experience, even with stricter database checks.
-  Timings for various commands compared on an HP N36L from cold:
+  Timings for various commands in seconds compared on an HP N36L from cold:
 
-| Command |   pm | pkgin |
-|---------|------|-------|
-|   avail | 0.2s |  0.7s |
-|  update | 3.5s | 40.5s |
+| Command |  pm | pkgin |
+|--------:|----:|------:|
+|   avail | 0.2 |   0.7 |
+|  update | 3.5 |  40.5 |
 
 Disadvantages:
 
