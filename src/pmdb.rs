@@ -47,6 +47,7 @@ impl PMDB {
         )
         .expect("Could not create database directory");
         let mut db = Connection::open(p)?;
+
         /*
          * pkgin plays rather fast and loose with the database, let's try
          * instead going the other way and making it as safe as possible.
@@ -92,6 +93,7 @@ impl PMDB {
             "
             CREATE TABLE repositories (
                 id                  INTEGER PRIMARY KEY,
+                prefix              TEXT,
                 url                 TEXT UNIQUE,
                 summary_suffix      TEXT,
                 mtime               INTEGER
@@ -207,6 +209,7 @@ impl PMDB {
     pub fn insert_repository(
         &mut self,
         url: &str,
+        prefix: &str,
         mtime: i64,
         summary_suffix: &str,
         pkgs: &[SummaryEntry],
@@ -216,11 +219,12 @@ impl PMDB {
         {
             let mut stmt = tx.prepare(
                 "INSERT INTO repositories
-                             (url, mtime, summary_suffix)
-                      VALUES (:url, :mtime, :summary_suffix)",
+                             (url, prefix, mtime, summary_suffix)
+                      VALUES (:url, :prefix, :mtime, :summary_suffix)",
             )?;
             stmt.execute_named(&[
                 (":url", &url),
+                (":prefix", &prefix),
                 (":mtime", &mtime),
                 (":summary_suffix", &summary_suffix),
             ])?;

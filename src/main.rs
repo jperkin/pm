@@ -40,6 +40,8 @@ use structopt::StructOpt;
 #[derive(Debug, StructOpt)]
 #[structopt(name = "pm", about = "A binary package manager for pkgsrc")]
 struct OptArgs {
+    #[structopt(short = "p", long = "prefix", help = "Set default prefix")]
+    prefix: Option<String>,
     #[structopt(short = "v", long = "verbose", help = "Enable verbose output")]
     verbose: bool,
     #[structopt(subcommand)]
@@ -138,6 +140,7 @@ fn update(
                     sumstr.parse();
                     db.insert_repository(
                         repo.url(),
+                        repo.prefix(),
                         last_modified,
                         e,
                         sumstr.entries(),
@@ -153,6 +156,20 @@ fn update(
     Ok(())
 }
 
+/*
+ * Check that we have a valid prefix for commands that require one, and return
+ * as a str for easy handling, otherwise exit.
+ */
+fn valid_prefix_or_errx(prefix: &Option<String>) -> &str {
+    match prefix {
+        Some(v) => return v.as_str(),
+        None => {
+            eprintln!("ERROR: No prefix configured");
+            std::process::exit(1);
+        }
+    };
+}
+
 fn main() -> Result<(), Box<std::error::Error>> {
     let cmd = OptArgs::from_args();
     let cfg = Config::load_default()?;
@@ -160,7 +177,18 @@ fn main() -> Result<(), Box<std::error::Error>> {
     let pmdb_file = dirs::data_dir().unwrap().join("pm.db");
     let mut db = PMDB::new(&pmdb_file)?;
 
-    /* Command line --verbose overrides config file */
+    /*
+     * Command line options override config file.
+     */
+    let prefix: Option<String> = if let Some(p) = cmd.prefix {
+        Some(p.to_string())
+    } else if let Some(p) = cfg.default_prefix() {
+        Some(p.to_string())
+    } else if let Some(p) = cfg.default_repo_prefix() {
+        Some(p.to_string())
+    } else {
+        None
+    };
     let verbose = cmd.verbose || cfg.verbose();
 
     match cmd.subcmd {

@@ -35,6 +35,7 @@ pub struct Config {
 #[derive(Debug, Deserialize)]
 pub struct ConfigFile {
     #[serde(default)]
+    default_prefix: Option<String>,
     verbose: Option<bool>,
     repository: Option<Vec<RepoConfig>>,
 }
@@ -42,12 +43,24 @@ pub struct ConfigFile {
 #[derive(Debug, Deserialize)]
 pub struct RepoConfig {
     url: String,
+    prefix: String,
     summary_extension: Option<String>,
 }
 
 impl Config {
     pub fn repositories(&self) -> &Option<Vec<RepoConfig>> {
         &self.file.repository
+    }
+
+    pub fn default_prefix(&self) -> &Option<String> {
+        &self.file.default_prefix
+    }
+
+    pub fn default_repo_prefix(&self) -> Option<&String> {
+        match &self.repositories() {
+            Some(r) => Some(&r[0].prefix),
+            None => None,
+        }
     }
 
     pub fn verbose(&self) -> bool {
@@ -81,6 +94,10 @@ impl Config {
 impl RepoConfig {
     pub fn url(&self) -> &String {
         &self.url
+    }
+
+    pub fn prefix(&self) -> &String {
+        &self.prefix
     }
 
     pub fn summary_extension(&self) -> &Option<String> {
