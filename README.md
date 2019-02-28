@@ -13,7 +13,16 @@ Enhancements compared to pkgin:
 
 * TOML configuration file for easy setup and extensibility.
 * Supports multiple repositories and multiple prefixes.
-* Significantly faster ("pm update" from scratch on an N36L takes 3 seconds compared to 40 seconds for "pkgin update").
+* Designed for stricter conformance and safety (has already led to finding one
+  pkg\_summary(5) bug on SmartOS).
+* Significantly faster!  pm(1) may use a bit more memory than pkgin but
+  delivers a much faster experience, even with stricter database checks.
+  Timings for various commands compared on an HP N36L from cold:
+
+| Command |   pm | pkgin |
+|---------|------|-------|
+|   avail | 0.2s |  0.7s |
+|  update | 3.5s | 40.5s |
 
 Disadvantages:
 
