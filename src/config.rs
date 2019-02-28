@@ -30,6 +30,7 @@ extern crate toml;
 pub struct Config {
     file: ConfigFile,
     filename: std::fs::File,
+    verbose: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -64,11 +65,11 @@ impl Config {
     }
 
     pub fn verbose(&self) -> bool {
-        /* XXX: probably a one-liner way of doing this? */
-        match self.file.verbose {
-            Some(v) => v,
-            None => false,
-        }
+        self.verbose
+    }
+
+    pub fn set_verbose(&mut self) {
+        self.verbose = true
     }
 
     pub fn load_default() -> Result<Config, std::io::Error> {
@@ -84,9 +85,11 @@ impl Config {
         let mut config_str = String::new();
         config_file.read_to_string(&mut config_str)?;
         let cfg: ConfigFile = toml::from_str(&config_str).unwrap();
+        let default_verbose = cfg.verbose.unwrap_or(false);
         Ok(Config {
             file: cfg,
             filename: config_file,
+            verbose: default_verbose,
         })
     }
 }

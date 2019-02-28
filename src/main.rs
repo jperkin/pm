@@ -79,11 +79,7 @@ fn get_summary_extensions(repo: &config::RepoConfig) -> Vec<&str> {
     }
 }
 
-fn update(
-    verbose: bool,
-    cfg: &Config,
-    db: &mut PMDB,
-) -> Result<(), Box<std::error::Error>> {
+fn update(cfg: &Config, db: &mut PMDB) -> Result<(), Box<std::error::Error>> {
     let client = reqwest::Client::new();
 
     /*
@@ -95,7 +91,7 @@ fn update(
             let summary_extensions = get_summary_extensions(&repo);
 
             for e in summary_extensions {
-                if verbose {
+                if cfg.verbose() {
                     println!("Trying summary_suffix={}", e);
                 }
 
@@ -179,7 +175,7 @@ fn valid_prefix_or_errx(prefix: &Option<String>) -> &str {
 
 fn main() -> Result<(), Box<std::error::Error>> {
     let cmd = OptArgs::from_args();
-    let cfg = Config::load_default()?;
+    let mut cfg = Config::load_default()?;
 
     let pmdb_file = dirs::data_dir().unwrap().join("pm.db");
     let mut db = PMDB::new(&pmdb_file)?;
@@ -196,13 +192,15 @@ fn main() -> Result<(), Box<std::error::Error>> {
     } else {
         None
     };
-    let verbose = cmd.verbose || cfg.verbose();
+    if cmd.verbose {
+        cfg.set_verbose();
+    }
 
     match cmd.subcmd {
         SubCmd::Avail => {
             avail::run(&mut db, valid_prefix_or_errx(&prefix))?;
         }
-        SubCmd::Update => update(verbose, &cfg, &mut db)?,
+        SubCmd::Update => update(&cfg, &mut db)?,
     };
 
     Ok(())
