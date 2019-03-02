@@ -14,7 +14,7 @@ Enhancements compared to pkgin:
 * TOML configuration file for easy setup and extensibility.
 * Supports multiple repositories and multiple prefixes.
 * Designed for stricter conformance and safety (has already led to finding one
-  `pkg\_summary(5)` bug on SmartOS).
+  `pkg_summary(5)` bug on SmartOS).
 * Significantly faster!  It may use a bit more memory than pkgin but delivers
   a much faster experience, even with stricter database checks.  Timings for
   various commands in seconds compared on an HP N36L from cold:
@@ -74,4 +74,20 @@ summary_extension = "gz"
 [[repository]]
 url = "https://pkgsrc.joyent.com/packages/Darwin/trunk/x86_64/All"
 prefix = "/opt/pkg"
+```
+
+With the two incompatible prefixes configured above, you can still query them:
+
+```console
+$ pm up
+Creating https://pkgsrc.joyent.com/packages/SmartOS/trunk/x86_64/All
+Creating https://pkgsrc.joyent.com/packages/Darwin/trunk/x86_64/All
+
+: Using the default prefix
+$ pm avail | wc -l
+   20288
+
+: Specifying the alternate prefix
+$ pm -p /opt/pkg avail | wc -l
+   18579
 ```
