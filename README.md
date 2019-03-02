@@ -56,29 +56,41 @@ SUBCOMMANDS:
 The configuration file for `pm` currently supports the following variables:
 
 ```toml
-# Enable verbose output.  Defaults to false.
-verbose = true
-
+#
 # When multiple repositories are configured, choose the ones associated with
 # this prefix by default.  Specify -p on the command line to override.
+#
 default_prefix = "/opt/local"
 
-# A configured repository.  "url" and "prefix" are mandatory.
+#
+# Enable verbose output.  Defaults to false.
+#
+verbose = true
+
+#
+# A configured repository.
+#
+#   * "url" and "prefix" are mandatory.
+#   * "summary_extension" is optional, and overrides the default set of
+#     pkg_summary extensions to search ("xz", "bz2", "gz").
+#
 [[repository]]
 url = "https://pkgsrc.joyent.com/packages/SmartOS/trunk/x86_64/All"
 prefix = "/opt/local"
-# Override the default ["xz", "bz2", "gz"] to force a particular extension.
 summary_extension = "gz"
 
+#
 # Another configured repository.  Obviously these two repositories are
-# incompatible and bad things would happen in real life, but are merely
+# incompatible and bad things would happen in real life, but they are
 # shown to provide an example.
+#
 [[repository]]
 url = "https://pkgsrc.joyent.com/packages/Darwin/trunk/x86_64/All"
 prefix = "/opt/pkg"
 ```
 
-With the two incompatible prefixes configured above, you can still query them:
+With the two incompatible prefixes configured above, you can still perform
+query commands on them:
 
 ```console
 $ pm up
@@ -88,8 +100,12 @@ Creating https://pkgsrc.joyent.com/packages/Darwin/trunk/x86_64/All
 : Using the default prefix
 $ pm avail | wc -l
    20288
+$ pm search ^vim-[0-9]
+vim-8.1.0800         Vim editor (vi clone) without GUI
 
 : Specifying the alternate prefix
 $ pm -p /opt/pkg avail | wc -l
    18579
+$ pm -p /opt/pkg search ^vim-[0-9]
+vim-8.1.0390         Vim editor (vi clone) without GUI
 ```
