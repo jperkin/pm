@@ -17,12 +17,13 @@ Enhancements compared to pkgin:
   `pkg_summary(5)` bug on SmartOS).
 * Significantly faster!  It may use a bit more memory than pkgin but delivers
   a much faster experience, even with stricter database checks.  Timings for
-  various commands in seconds compared on an HP N36L from cold:
+  various commands in seconds compared on an HP N36L:
 
-| Command |  pm | pkgin |
-|--------:|----:|------:|
-|   avail | 0.2 |   0.7 |
-|  update | 3.5 |  40.5 |
+| Command |   pm | pkgin | Speedup |
+|--------:|-----:|------:|--------:|
+|   avail | 0.20 |  0.75 |  **4x** |
+|  search | 0.15 |  0.80 |  **5x** |
+|  update | 3.75 | 41.75 | **11x** |
 
 Disadvantages:
 
