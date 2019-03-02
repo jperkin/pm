@@ -19,7 +19,6 @@
 use crate::OptArgs;
 use serde_derive::Deserialize;
 use std::fs;
-use std::io::prelude::*;
 use std::path::PathBuf;
 
 extern crate dirs;
@@ -32,6 +31,7 @@ extern crate toml;
 pub struct Config {
     file: ConfigFile,
     filename: PathBuf,
+    prefix: Option<String>,
     verbose: bool,
 }
 
@@ -52,6 +52,9 @@ pub struct RepoConfig {
 
 impl Config {
     pub fn set_config_from_cmdline(&mut self, argv: &OptArgs) {
+        if argv.prefix.is_some() {
+            self.prefix = argv.prefix.clone();
+        }
         if argv.verbose {
             self.verbose = true;
         }
@@ -61,15 +64,8 @@ impl Config {
         &self.file.repository
     }
 
-    pub fn default_prefix(&self) -> &Option<String> {
-        &self.file.default_prefix
-    }
-
-    pub fn default_repo_prefix(&self) -> Option<&String> {
-        match &self.repositories() {
-            Some(r) => Some(&r[0].prefix),
-            None => None,
-        }
+    pub fn prefix(&self) -> &Option<String> {
+        &self.prefix
     }
 
     pub fn verbose(&self) -> bool {
@@ -93,12 +89,34 @@ impl Config {
 
         let config_str: String = fs::read_to_string(&config_file)?;
         let cfg: ConfigFile = toml::from_str(&config_str).unwrap();
+        let default_prefix: Option<String> =
+            if let Some(p) = &cfg.default_prefix() {
+                Some(p.to_string())
+            } else if let Some(p) = &cfg.default_repo_prefix() {
+                Some(p.to_string())
+            } else {
+                None
+            };
         let default_verbose = cfg.verbose.unwrap_or(false);
         Ok(Config {
             file: cfg,
             filename: config_file,
+            prefix: default_prefix,
             verbose: default_verbose,
         })
+    }
+}
+
+impl ConfigFile {
+    pub fn default_prefix(&self) -> &Option<String> {
+        &self.default_prefix
+    }
+
+    pub fn default_repo_prefix(&self) -> Option<&String> {
+        match &self.repository {
+            Some(r) => Some(&r[0].prefix),
+            None => None,
+        }
     }
 }
 

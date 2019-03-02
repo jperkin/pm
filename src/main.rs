@@ -184,27 +184,15 @@ fn main() -> Result<(), Box<std::error::Error>> {
 
     /* Pass cmd so that the user can override the default with -c */
     let mut cfg = Config::load(&cmd)?;
+    cfg.set_config_from_cmdline(&cmd);
 
     let pmdb_file = dirs::data_dir().unwrap().join("pm.db");
     let mut db = PMDB::new(&pmdb_file)?;
 
-    /*
-     * Command line options override config file.
-     */
-    let prefix: Option<String> = if let Some(p) = &cmd.prefix {
-        Some(p.to_string())
-    } else if let Some(p) = cfg.default_prefix() {
-        Some(p.to_string())
-    } else if let Some(p) = cfg.default_repo_prefix() {
-        Some(p.to_string())
-    } else {
-        None
-    };
-    cfg.set_config_from_cmdline(&cmd);
-
     match cmd.subcmd {
         SubCmd::Avail => {
-            avail::run(&mut db, valid_prefix_or_errx(&prefix))?;
+            let prefix = valid_prefix_or_errx(&cfg.prefix());
+            avail::run(&mut db, prefix)?;
         }
         SubCmd::Update => update(&cfg, &mut db)?,
     };
