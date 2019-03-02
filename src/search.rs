@@ -13,34 +13,32 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * avail.rs - handle "pm avail" command.
+ * search.rs - handle "pm search" command.
  */
 
 use crate::pmdb::PMDB;
+use regex::Regex;
 
-#[derive(Debug)]
-pub struct AvailablePackage {
-    pub pkgname: String,
-    pub comment: String,
-}
-
-pub fn run(db: &mut PMDB, prefix: &str) -> Result<(), Box<std::error::Error>> {
+pub fn run(
+    db: &mut PMDB,
+    prefix: &str,
+    regstr: &str,
+) -> Result<(), Box<std::error::Error>> {
+    /*
+     * For now we force case-insensitive matches by default (to avoid the
+     * "ImageMagick" problem), but this should really go into search flags.
+     */
+    let refmt = format!("(?i){}", regstr);
+    let re = Regex::new(&refmt).unwrap();
     let availpkgs = db.get_remote_pkgs_by_prefix(prefix)?;
     if availpkgs.is_empty() {
         eprintln!("No packages available for prefix={}", prefix);
         std::process::exit(1);
     }
     for pkg in availpkgs {
-        println!("{:20} {}", pkg.pkgname(), pkg.comment());
+        if re.is_match(pkg.pkgname()) {
+            println!("{:20} {}", pkg.pkgname(), pkg.comment());
+        }
     }
     Ok(())
-}
-
-impl AvailablePackage {
-    pub fn pkgname(&self) -> &String {
-        &self.pkgname
-    }
-    pub fn comment(&self) -> &String {
-        &self.comment
-    }
 }

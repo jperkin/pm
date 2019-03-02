@@ -13,7 +13,7 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * summary.rs - handle pkg_summary(5) parsing
+ * summary.rs - handle pkg_summary(5) parsing.
  */
 
 use std::io::Write;

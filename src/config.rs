@@ -13,7 +13,7 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * config.rs - handle loading/parsing of pm(1) config files written in TOML
+ * config.rs - handle loading/parsing of pm(1) config files written in TOML.
  */
 
 use crate::OptArgs;
