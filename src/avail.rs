@@ -26,6 +26,10 @@ pub struct AvailablePackage {
 
 pub fn run(db: &mut PMDB, prefix: &str) -> Result<(), Box<std::error::Error>> {
     let availpkgs = db.get_remote_pkgs_by_prefix(prefix)?;
+    if availpkgs.is_empty() {
+        eprintln!("No packages available for prefix={}", prefix);
+        std::process::exit(1);
+    }
     for pkg in availpkgs {
         println!("{:20} {}", pkg.pkgname(), pkg.comment());
     }
