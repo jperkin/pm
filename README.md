@@ -46,6 +46,7 @@ OPTIONS:
 SUBCOMMANDS:
     avail     List available packages
     help      Prints this message or the help of the given subcommand(s)
+    search    Search available packages
     update    Update pkg_summary from each configured repository
 ```
 

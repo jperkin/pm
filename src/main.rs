@@ -25,6 +25,7 @@ extern crate bzip2;
 extern crate chrono;
 extern crate flate2;
 extern crate httpdate;
+extern crate regex;
 extern crate rusqlite;
 extern crate structopt;
 extern crate xz2;
@@ -63,6 +64,12 @@ enum SubCmd {
         about = "List available packages"
     )]
     Avail,
+    #[structopt(
+        name = "search",
+        alias = "se",
+        about = "Search available packages"
+    )]
+    Search { query: String },
     #[structopt(
         name = "update",
         alias = "up",
@@ -193,6 +200,10 @@ fn main() -> Result<(), Box<std::error::Error>> {
         SubCmd::Avail => {
             let prefix = valid_prefix_or_errx(&cfg.prefix());
             avail::run(&mut db, prefix)?;
+        }
+        SubCmd::Search { query } => {
+            let prefix = valid_prefix_or_errx(&cfg.prefix());
+            avail::search(&mut db, prefix, &query)?;
         }
         SubCmd::Update => update(&cfg, &mut db)?,
     };

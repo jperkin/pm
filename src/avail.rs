@@ -17,6 +17,7 @@
  */
 
 use crate::pmdb::PMDB;
+use regex::Regex;
 
 #[derive(Debug)]
 pub struct AvailablePackage {
@@ -32,6 +33,30 @@ pub fn run(db: &mut PMDB, prefix: &str) -> Result<(), Box<std::error::Error>> {
     }
     for pkg in availpkgs {
         println!("{:20} {}", pkg.pkgname(), pkg.comment());
+    }
+    Ok(())
+}
+
+pub fn search(
+    db: &mut PMDB,
+    prefix: &str,
+    regstr: &str,
+) -> Result<(), Box<std::error::Error>> {
+    /*
+     * For now we force case-insensitive matches by default (to avoid the
+     * "ImageMagick" problem), but this should really go into search flags.
+     */
+    let refmt = format!("(?i){}", regstr);
+    let re = Regex::new(&refmt).unwrap();
+    let availpkgs = db.get_remote_pkgs_by_prefix(prefix)?;
+    if availpkgs.is_empty() {
+        eprintln!("No packages available for prefix={}", prefix);
+        std::process::exit(1);
+    }
+    for pkg in availpkgs {
+        if re.is_match(pkg.pkgname()) {
+            println!("{:20} {}", pkg.pkgname(), pkg.comment());
+        }
     }
     Ok(())
 }
