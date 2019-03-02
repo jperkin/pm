@@ -69,7 +69,10 @@ enum SubCmd {
         alias = "se",
         about = "Search available packages"
     )]
-    Search { query: String },
+    Search {
+        #[structopt(help = "Query string (regular expression)")]
+        query: String,
+    },
     #[structopt(
         name = "update",
         alias = "up",
