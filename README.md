@@ -19,11 +19,11 @@ Enhancements compared to pkgin:
   a much faster experience, even with stricter database checks.  Timings for
   various commands in seconds compared on an HP N36L:
 
-| Command |   pm | pkgin | Speedup |
-|--------:|-----:|------:|--------:|
-|   avail | 0.20 |  0.75 |  **4x** |
-|  search | 0.15 |  0.80 |  **5x** |
-|  update | 3.75 | 41.75 | **11x** |
+| Command |    pm |  pkgin | Improvement |
+|--------:|------:|-------:|------------:|
+|   avail | 0.20s |  0.75s |      **4x** |
+|  search | 0.15s |  0.80s |      **5x** |
+|  update | 3.75s | 41.75s |     **11x** |
 
 Disadvantages:
 
