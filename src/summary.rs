@@ -46,11 +46,11 @@ pub struct SummaryEntry {
     opsys: String,
     os_version: String,
     pkg_options: Option<String>,
-    pkgbase: String,        // Non-standard, name part of pkgname
-    pkgname: String,        // Full package name including version
+    pkgbase: String, // Non-standard, name part of pkgname
+    pkgname: String, // Full package name including version
     pkgpath: String,
     pkgtools_version: String,
-    pkgversion: String,     // Non-standard, version part of pkgname
+    pkgversion: String, // Non-standard, version part of pkgname
     prev_pkgpath: Option<String>,
     provides: Vec<String>,
     requires: Vec<String>,
