@@ -16,9 +16,11 @@
  * config.rs - handle loading/parsing of pm(1) config files written in TOML
  */
 
+use crate::OptArgs;
 use serde_derive::Deserialize;
-use std::fs::File;
+use std::fs;
 use std::io::prelude::*;
+use std::path::PathBuf;
 
 extern crate dirs;
 extern crate toml;
@@ -29,7 +31,7 @@ extern crate toml;
 #[derive(Debug)]
 pub struct Config {
     file: ConfigFile,
-    filename: std::fs::File,
+    filename: PathBuf,
     verbose: bool,
 }
 
@@ -49,6 +51,12 @@ pub struct RepoConfig {
 }
 
 impl Config {
+    pub fn set_config_from_cmdline(&mut self, argv: &OptArgs) {
+        if argv.verbose {
+            self.verbose = true;
+        }
+    }
+
     pub fn repositories(&self) -> &Option<Vec<RepoConfig>> {
         &self.file.repository
     }
@@ -68,22 +76,22 @@ impl Config {
         self.verbose
     }
 
-    pub fn set_verbose(&mut self) {
-        self.verbose = true
-    }
+    pub fn load(argv: &OptArgs) -> Result<Config, std::io::Error> {
+        let config_file: PathBuf = if argv.config.is_some() {
+            PathBuf::from(argv.config.clone().unwrap().as_str())
+        } else {
+            dirs::config_dir().unwrap().join("pm.toml")
+        };
 
-    pub fn load_default() -> Result<Config, std::io::Error> {
-        let default_config = dirs::config_dir().unwrap().join("pm.toml");
-        if !default_config.exists() {
+        if !config_file.exists() {
             eprintln!(
-                "ERROR: Default configuration file {} does not exist",
-                default_config.display()
+                "ERROR: Configuration file {} does not exist",
+                config_file.display()
             );
             std::process::exit(1);
         }
-        let mut config_file = File::open(default_config)?;
-        let mut config_str = String::new();
-        config_file.read_to_string(&mut config_str)?;
+
+        let config_str: String = fs::read_to_string(&config_file)?;
         let cfg: ConfigFile = toml::from_str(&config_str).unwrap();
         let default_verbose = cfg.verbose.unwrap_or(false);
         Ok(Config {

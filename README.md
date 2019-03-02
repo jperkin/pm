@@ -40,6 +40,7 @@ FLAGS:
     -v, --verbose    Enable verbose output
 
 OPTIONS:
+    -c, --config <config>    Use specified configuration file
     -p, --prefix <prefix>    Set default prefix
 
 SUBCOMMANDS:

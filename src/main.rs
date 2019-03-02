@@ -40,7 +40,13 @@ use structopt::StructOpt;
  */
 #[derive(Debug, StructOpt)]
 #[structopt(name = "pm", about = "A binary package manager for pkgsrc")]
-struct OptArgs {
+pub struct OptArgs {
+    #[structopt(
+        short = "c",
+        long = "config",
+        help = "Use specified configuration file"
+    )]
+    config: Option<String>,
     #[structopt(short = "p", long = "prefix", help = "Set default prefix")]
     prefix: Option<String>,
     #[structopt(short = "v", long = "verbose", help = "Enable verbose output")]
@@ -175,7 +181,9 @@ fn valid_prefix_or_errx(prefix: &Option<String>) -> &str {
 
 fn main() -> Result<(), Box<std::error::Error>> {
     let cmd = OptArgs::from_args();
-    let mut cfg = Config::load_default()?;
+
+    /* Pass cmd so that the user can override the default with -c */
+    let mut cfg = Config::load(&cmd)?;
 
     let pmdb_file = dirs::data_dir().unwrap().join("pm.db");
     let mut db = PMDB::new(&pmdb_file)?;
@@ -183,7 +191,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
     /*
      * Command line options override config file.
      */
-    let prefix: Option<String> = if let Some(p) = cmd.prefix {
+    let prefix: Option<String> = if let Some(p) = &cmd.prefix {
         Some(p.to_string())
     } else if let Some(p) = cfg.default_prefix() {
         Some(p.to_string())
@@ -192,9 +200,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
     } else {
         None
     };
-    if cmd.verbose {
-        cfg.set_verbose();
-    }
+    cfg.set_config_from_cmdline(&cmd);
 
     match cmd.subcmd {
         SubCmd::Avail => {
