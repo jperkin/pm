@@ -40,19 +40,17 @@ pub struct SummaryEntry {
     file_cksum: Option<String>,
     file_name: Option<String>,
     file_size: Option<i64>,
-    /* Non-standard field, used to split pkgname into constituent parts */
-    fullpkgname: String,
     homepage: Option<String>,
     license: Option<String>,
     machine_arch: String,
     opsys: String,
     os_version: String,
     pkg_options: Option<String>,
-    pkgname: String,
+    pkgbase: String,        // Non-standard, name part of pkgname
+    pkgname: String,        // Full package name including version
     pkgpath: String,
     pkgtools_version: String,
-    /* Non-standard field, used to split pkgname into constituent parts */
-    pkgversion: String,
+    pkgversion: String,     // Non-standard, version part of pkgname
     prev_pkgpath: Option<String>,
     provides: Vec<String>,
     requires: Vec<String>,
@@ -107,9 +105,6 @@ impl SummaryEntry {
     pub fn file_size(&self) -> &Option<i64> {
         &self.file_size
     }
-    pub fn fullpkgname(&self) -> &String {
-        &self.fullpkgname
-    }
     pub fn homepage(&self) -> &str {
         match &self.homepage {
             Some(s) => s.as_str(),
@@ -137,6 +132,9 @@ impl SummaryEntry {
             Some(s) => s.as_str(),
             None => "",
         }
+    }
+    pub fn pkgbase(&self) -> &String {
+        &self.pkgbase
     }
     pub fn pkgname(&self) -> &String {
         &self.pkgname
@@ -204,9 +202,9 @@ impl SummaryEntry {
             /* Split PKGNAME into constituent parts */
             "PKGNAME" => {
                 let splitstring = valstring.clone();
-                self.fullpkgname = valstring;
+                self.pkgname = valstring;
                 let v: Vec<&str> = splitstring.rsplitn(2, '-').collect();
-                self.pkgname = v[1].to_string();
+                self.pkgbase = v[1].to_string();
                 self.pkgversion = v[0].to_string();
             }
             "PKGPATH" => self.pkgpath = valstring,

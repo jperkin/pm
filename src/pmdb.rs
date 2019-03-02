@@ -107,12 +107,12 @@ impl PMDB {
                 comment             TEXT,
                 description         TEXT,
                 file_size           INTEGER,
-                fullpkgname         TEXT,
                 homepage            TEXT NULL,
                 license             TEXT NULL,
                 opsys               TEXT,
                 os_version          TEXT,
                 pkg_options         TEXT NULL,
+                pkgbase             TEXT,
                 pkgname             TEXT,
                 pkgpath             TEXT,
                 pkgtools_version    TEXT,
@@ -155,15 +155,14 @@ impl PMDB {
     ) -> rusqlite::Result<()> {
         let mut stmt = tx.prepare(
             "INSERT INTO remote_pkg
-                         (repository_id, build_date, categories, comment,
-                          description, file_size, fullpkgname, homepage,
-                          license, opsys, os_version, pkg_options, pkgname,
-                          pkgpath, pkgtools_version, pkgversion, size_pkg)
-                  VALUES (:repo_id, :build_date, :categories, :comment,
-                          :description, :file_size, :fullpkgname,
-                          :homepage, :license, :opsys, :os_version,
-                          :pkg_options, :pkgname, :pkgpath,
-                          :pkgtools_version, :pkgversion, :size_pkg)",
+                    (repository_id, build_date, categories, comment,
+                     description, file_size, homepage, license, opsys,
+                     os_version, pkg_options, pkgbase, pkgname, pkgpath,
+                     pkgtools_version, pkgversion, size_pkg)
+             VALUES (:repo_id, :build_date, :categories, :comment,
+                     :description, :file_size, :homepage, :license, :opsys,
+                     :os_version, :pkg_options, :pkgbase, :pkgname, :pkgpath,
+                     :pkgtools_version, :pkgversion, :size_pkg)",
         )?;
 
         for p in pkgs {
@@ -178,12 +177,12 @@ impl PMDB {
                 (":comment", &p.comment()),
                 (":description", &p.description().join("\n")),
                 (":file_size", &(p.file_size().unwrap())),
-                (":fullpkgname", &p.fullpkgname()),
                 (":homepage", &p.homepage()),
                 (":license", &p.license()),
                 (":opsys", &p.opsys()),
                 (":os_version", &p.os_version()),
                 (":pkg_options", &p.pkg_options()),
+                (":pkgbase", &p.pkgbase()),
                 (":pkgname", &p.pkgname()),
                 (":pkgpath", &p.pkgpath()),
                 (":pkgtools_version", &p.pkgtools_version()),
@@ -289,7 +288,7 @@ impl PMDB {
         let mut result = Vec::new();
         let mut stmt = self.db.prepare(
             "
-                SELECT fullpkgname, comment
+                SELECT pkgname, comment
                   FROM remote_pkg
             INNER JOIN repositories
                     ON repositories.id = remote_pkg.repository_id
