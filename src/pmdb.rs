@@ -176,7 +176,7 @@ impl PMDB {
                 (":categories", &p.categories().join(" ")),
                 (":comment", &p.comment()),
                 (":description", &p.description().join("\n")),
-                (":file_size", &(p.file_size().unwrap())),
+                (":file_size", &(p.file_size())),
                 (":homepage", &p.homepage()),
                 (":license", &p.license()),
                 (":opsys", &p.opsys()),

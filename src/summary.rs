@@ -102,8 +102,8 @@ impl SummaryEntry {
             None => "",
         }
     }
-    pub fn file_size(&self) -> &Option<i64> {
-        &self.file_size
+    pub fn file_size(&self) -> i64 {
+        self.file_size.unwrap_or(0)
     }
     pub fn homepage(&self) -> &str {
         match &self.homepage {
