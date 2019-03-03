@@ -16,12 +16,13 @@
  * search.rs - handle "pm search" command.
  */
 
+use crate::config;
 use crate::pmdb::PMDB;
 use regex::Regex;
 
 pub fn run(
+    cfg: &config::Config,
     db: &mut PMDB,
-    prefix: &str,
     regstr: &str,
 ) -> Result<(), Box<std::error::Error>> {
     /*
@@ -30,9 +31,9 @@ pub fn run(
      */
     let refmt = format!("(?i){}", regstr);
     let re = Regex::new(&refmt).unwrap();
-    let availpkgs = db.get_remote_pkgs_by_prefix(prefix)?;
+    let availpkgs = db.get_remote_pkgs_by_prefix(cfg.prefix())?;
     if availpkgs.is_empty() {
-        eprintln!("No packages available for prefix={}", prefix);
+        eprintln!("No packages available for prefix={}", cfg.prefix());
         std::process::exit(1);
     }
     for pkg in availpkgs {

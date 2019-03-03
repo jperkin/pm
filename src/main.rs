@@ -80,20 +80,6 @@ enum SubCmd {
     Update,
 }
 
-/*
- * Check that we have a valid prefix for commands that require one, and return
- * as a str for easy handling, otherwise exit.
- */
-fn valid_prefix_or_errx(prefix: &Option<String>) -> &str {
-    match prefix {
-        Some(v) => v.as_str(),
-        None => {
-            eprintln!("ERROR: No prefix configured");
-            std::process::exit(1);
-        }
-    }
-}
-
 fn main() -> Result<(), Box<std::error::Error>> {
     let cmd = OptArgs::from_args();
 
@@ -106,12 +92,10 @@ fn main() -> Result<(), Box<std::error::Error>> {
 
     match cmd.subcmd {
         SubCmd::Avail => {
-            let prefix = valid_prefix_or_errx(&cfg.prefix());
-            avail::run(&mut db, prefix)?;
+            avail::run(&cfg, &mut db)?;
         }
         SubCmd::Search { query } => {
-            let prefix = valid_prefix_or_errx(&cfg.prefix());
-            search::run(&mut db, prefix, &query)?;
+            search::run(&cfg, &mut db, &query)?;
         }
         SubCmd::Update => {
             update::run(&cfg, &mut db)?;

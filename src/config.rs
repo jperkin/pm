@@ -31,7 +31,7 @@ extern crate toml;
 pub struct Config {
     file: ConfigFile,
     filename: PathBuf,
-    prefix: Option<String>,
+    prefix: String,
     verbose: bool,
 }
 
@@ -53,7 +53,7 @@ pub struct RepoConfig {
 impl Config {
     pub fn set_config_from_cmdline(&mut self, argv: &OptArgs) {
         if argv.prefix.is_some() {
-            self.prefix = argv.prefix.clone();
+            self.prefix = argv.prefix.clone().unwrap();
         }
         if argv.verbose {
             self.verbose = true;
@@ -64,7 +64,7 @@ impl Config {
         &self.file.repository
     }
 
-    pub fn prefix(&self) -> &Option<String> {
+    pub fn prefix(&self) -> &str {
         &self.prefix
     }
 
@@ -89,14 +89,15 @@ impl Config {
 
         let config_str: String = fs::read_to_string(&config_file)?;
         let cfg: ConfigFile = toml::from_str(&config_str).unwrap();
-        let default_prefix: Option<String> =
-            if let Some(p) = &cfg.default_prefix() {
-                Some(p.to_string())
-            } else if let Some(p) = &cfg.default_repo_prefix() {
-                Some(p.to_string())
-            } else {
-                None
-            };
+        let mut default_prefix;
+        if let Some(p) = &cfg.default_prefix() {
+            default_prefix = p.to_string();
+        } else if let Some(p) = &cfg.default_repo_prefix() {
+            default_prefix = p.to_string()
+        } else {
+            eprintln!("ERROR: No repositories specified");
+            std::process::exit(1);
+        }
         let default_verbose = cfg.verbose.unwrap_or(false);
         Ok(Config {
             file: cfg,

@@ -16,6 +16,7 @@
  * avail.rs - handle "pm avail" command.
  */
 
+use crate::config;
 use crate::pmdb::PMDB;
 
 #[derive(Debug)]
@@ -24,10 +25,13 @@ pub struct AvailablePackage {
     pub comment: String,
 }
 
-pub fn run(db: &mut PMDB, prefix: &str) -> Result<(), Box<std::error::Error>> {
-    let availpkgs = db.get_remote_pkgs_by_prefix(prefix)?;
+pub fn run(
+    cfg: &config::Config,
+    db: &mut PMDB,
+) -> Result<(), Box<std::error::Error>> {
+    let availpkgs = db.get_remote_pkgs_by_prefix(cfg.prefix())?;
     if availpkgs.is_empty() {
-        eprintln!("No packages available for prefix={}", prefix);
+        eprintln!("No packages available for prefix={}", cfg.prefix());
         std::process::exit(1);
     }
     for pkg in availpkgs {
