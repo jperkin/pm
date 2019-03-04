@@ -76,6 +76,10 @@ fn update_local_repository(
      */
     let pkg_admin = format!("{}/sbin/pkg_admin", cfg.prefix());
     let pkg_admin = PathBuf::from(pkg_admin);
+    if !pkg_admin.exists() {
+        eprintln!("ERROR: No pkg_install found under {}", cfg.prefix());
+        std::process::exit(1);
+    }
     let pkgdb = Command::new(pkg_admin.as_path())
         .args(&["config-var", "PKG_DBDIR"])
         .output()
