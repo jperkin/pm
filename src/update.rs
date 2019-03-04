@@ -44,7 +44,8 @@ fn get_summary_extensions(repo: &config::RepoConfig) -> Vec<&str> {
 /*
  * Get Vec of packages installed under the chosen prefix.
  */
-fn get_local_packages(cfg: &config::Config,
+fn get_local_packages(
+    cfg: &config::Config,
 ) -> Result<SummaryStream, Box<std::error::Error>> {
     /*
      * Update local pkg repository if necessary.
@@ -199,7 +200,6 @@ pub fn run(
     cfg: &config::Config,
     db: &mut PMDB,
 ) -> Result<(), Box<std::error::Error>> {
-
     update_local_repository(&cfg, db)?;
     update_remote_repositories(&cfg, db)?;
 
