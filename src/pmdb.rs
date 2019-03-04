@@ -542,7 +542,8 @@ impl PMDB {
                   FROM remote_pkg
             INNER JOIN remote_repository
                     ON remote_repository.id = remote_pkg.repository_id
-                 WHERE remote_repository.prefix = :prefix",
+                 WHERE remote_repository.prefix = :prefix
+              ORDER BY pkgname ASC",
         )?;
         let rows =
             stmt.query_map_named(&[(":prefix", &prefix)], |row| ListPackage {
