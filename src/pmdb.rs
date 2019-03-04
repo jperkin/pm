@@ -206,9 +206,9 @@ impl PMDB {
         let mut stmt = self.db.prepare(
             "SELECT mtime, ntime
                FROM local_repository
-              WHERE prefix = ?",
+              WHERE prefix = :prefix",
         )?;
-        let mut rows = stmt.query(&[prefix])?;
+        let mut rows = stmt.query_named(&[(":prefix", &prefix)])?;
         match rows.next() {
             Some(row) => {
                 let row = row?;
@@ -230,9 +230,9 @@ impl PMDB {
         let mut stmt = self.db.prepare(
             "SELECT mtime, summary_suffix
                FROM remote_repository
-              WHERE url = ?",
+              WHERE url = :url",
         )?;
-        let mut rows = stmt.query(&[url])?;
+        let mut rows = stmt.query_named(&[(":url", &url)])?;
         match rows.next() {
             Some(row) => {
                 let row = row?;
