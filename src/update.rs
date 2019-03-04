@@ -87,14 +87,14 @@ fn update_local_repository(
     let pkgdb_mtime_sec = pkgdb_mtime.as_secs() as i64;
     let pkgdb_mtime_nsec = pkgdb_mtime.subsec_nanos() as i32;
 
-    if let Some(r) = db.get_local_repository(pkgdb_dir)? {
+    if let Some(r) = db.get_local_repository(cfg.prefix())? {
         if r.up_to_date(pkgdb_mtime_sec, pkgdb_mtime_nsec) {
             return Ok(());
         } else {
             println!("Refreshing packages installed under {}", cfg.prefix());
             let pkgs: SummaryStream = get_local_packages(&cfg)?;
             db.update_local_repository(
-                pkgdb_dir,
+                cfg.prefix(),
                 pkgdb_mtime_sec,
                 pkgdb_mtime_nsec,
                 pkgs.entries(),
@@ -104,7 +104,7 @@ fn update_local_repository(
         println!("Recording packages installed under {}", cfg.prefix());
         let pkgs: SummaryStream = get_local_packages(&cfg)?;
         db.insert_local_repository(
-            pkgdb_dir,
+            cfg.prefix(),
             pkgdb_mtime_sec,
             pkgdb_mtime_nsec,
             pkgs.entries(),

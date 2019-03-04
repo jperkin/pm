@@ -16,8 +16,8 @@
  * pm(1) - a package manager for pkgsrc.
  */
 
-mod avail;
 mod config;
+mod list;
 mod pmdb;
 mod search;
 mod summary;
@@ -64,6 +64,12 @@ enum SubCmd {
     )]
     Avail,
     #[structopt(
+        name = "list",
+        alias = "ls",
+        about = "List installed packages"
+    )]
+    List,
+    #[structopt(
         name = "search",
         alias = "se",
         about = "Search available packages"
@@ -92,7 +98,10 @@ fn main() -> Result<(), Box<std::error::Error>> {
 
     match cmd.subcmd {
         SubCmd::Avail => {
-            avail::run(&cfg, &mut db)?;
+            list::avail(&cfg, &mut db)?;
+        }
+        SubCmd::List => {
+            list::list(&cfg, &mut db)?;
         }
         SubCmd::Search { query } => {
             search::run(&cfg, &mut db, &query)?;

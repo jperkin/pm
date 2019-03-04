@@ -31,12 +31,12 @@ pub fn run(
      */
     let refmt = format!("(?i){}", regstr);
     let re = Regex::new(&refmt).unwrap();
-    let availpkgs = db.get_remote_pkgs_by_prefix(cfg.prefix())?;
-    if availpkgs.is_empty() {
+    let pkgs = db.get_remote_pkgs_by_prefix(cfg.prefix())?;
+    if pkgs.is_empty() {
         eprintln!("No packages available for prefix={}", cfg.prefix());
         std::process::exit(1);
     }
-    for pkg in availpkgs {
+    for pkg in pkgs {
         if re.is_match(pkg.pkgname()) {
             println!("{:20} {}", pkg.pkgname(), pkg.comment());
         }

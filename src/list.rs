@@ -13,34 +13,49 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * avail.rs - handle "pm avail" command.
+ * list.rs - handle commands that list packages (avail, list)
  */
 
 use crate::config;
 use crate::pmdb::PMDB;
 
 #[derive(Debug)]
-pub struct AvailablePackage {
+pub struct ListPackage {
     pub pkgname: String,
     pub comment: String,
 }
 
-pub fn run(
+pub fn avail(
     cfg: &config::Config,
     db: &mut PMDB,
 ) -> Result<(), Box<std::error::Error>> {
-    let availpkgs = db.get_remote_pkgs_by_prefix(cfg.prefix())?;
-    if availpkgs.is_empty() {
+    let pkgs = db.get_remote_pkgs_by_prefix(cfg.prefix())?;
+    if pkgs.is_empty() {
         eprintln!("No packages available for prefix={}", cfg.prefix());
         std::process::exit(1);
     }
-    for pkg in availpkgs {
+    for pkg in pkgs {
         println!("{:20} {}", pkg.pkgname(), pkg.comment());
     }
     Ok(())
 }
 
-impl AvailablePackage {
+pub fn list(
+    cfg: &config::Config,
+    db: &mut PMDB,
+) -> Result<(), Box<std::error::Error>> {
+    let pkgs = db.get_local_pkgs_by_prefix(cfg.prefix())?;
+    if pkgs.is_empty() {
+        eprintln!("No packages recorded under {}", cfg.prefix());
+        std::process::exit(1);
+    }
+    for pkg in pkgs {
+        println!("{:20} {}", pkg.pkgname(), pkg.comment());
+    }
+    Ok(())
+}
+
+impl ListPackage {
     pub fn pkgname(&self) -> &String {
         &self.pkgname
     }

@@ -18,7 +18,7 @@
 
 extern crate rusqlite;
 
-use crate::avail::AvailablePackage;
+use crate::list::ListPackage;
 use crate::summary::SummaryEntry;
 use rusqlite::Connection;
 use std::fs;
@@ -31,7 +31,7 @@ pub struct PMDB {
 
 #[derive(Debug)]
 pub struct LocalRepository {
-    pkgdb: String,
+    prefix: String,
     mtime: i64,
     ntime: i32,
     need_update: bool,
@@ -46,7 +46,7 @@ pub struct RemoteRepository {
 }
 
 #[cfg_attr(feature = "cargo-clippy", allow(clippy::unreadable_literal))]
-const DB_VERSION: i64 = 20190303;
+const DB_VERSION: i64 = 20190304;
 
 impl PMDB {
     /*
@@ -121,7 +121,7 @@ impl PMDB {
             );
             CREATE TABLE local_repository (
                 id                  INTEGER PRIMARY KEY,
-                pkgdb               TEXT UNIQUE,
+                prefix              TEXT UNIQUE,
                 mtime               INTEGER,
                 ntime               INTEGER
             );
@@ -201,19 +201,19 @@ impl PMDB {
 
     pub fn get_local_repository(
         &self,
-        pkgdb: &str,
+        prefix: &str,
     ) -> rusqlite::Result<Option<LocalRepository>> {
         let mut stmt = self.db.prepare(
             "SELECT mtime, ntime
                FROM local_repository
-              WHERE pkgdb = ?",
+              WHERE prefix = ?",
         )?;
-        let mut rows = stmt.query(&[pkgdb])?;
+        let mut rows = stmt.query(&[prefix])?;
         match rows.next() {
             Some(row) => {
                 let row = row?;
                 Ok(Some(LocalRepository {
-                    pkgdb: pkgdb.to_string(),
+                    prefix: prefix.to_string(),
                     mtime: row.get(0),
                     ntime: row.get(1),
                     need_update: false,
@@ -364,7 +364,7 @@ impl PMDB {
 
     pub fn insert_local_repository(
         &mut self,
-        pkgdb: &str,
+        prefix: &str,
         mtime: i64,
         ntime: i32,
         pkgs: &[SummaryEntry],
@@ -374,11 +374,11 @@ impl PMDB {
         {
             let mut stmt = tx.prepare(
                 "INSERT INTO local_repository
-                        (pkgdb, mtime, ntime)
-                 VALUES (:pkgdb, :mtime, :ntime)",
+                        (prefix, mtime, ntime)
+                 VALUES (:prefix, :mtime, :ntime)",
             )?;
             stmt.execute_named(&[
-                (":pkgdb", &pkgdb),
+                (":prefix", &prefix),
                 (":mtime", &mtime),
                 (":ntime", &ntime),
             ])?;
@@ -422,7 +422,7 @@ impl PMDB {
 
     pub fn update_local_repository(
         &mut self,
-        pkgdb: &str,
+        prefix: &str,
         mtime: i64,
         ntime: i32,
         pkgs: &[SummaryEntry],
@@ -433,8 +433,8 @@ impl PMDB {
             let repo_id = tx.query_row_named(
                 "SELECT id
                    FROM local_repository
-                  WHERE pkgdb = :pkgdb",
-                &[(":pkgdb", &pkgdb)],
+                  WHERE prefix = :prefix",
+                &[(":prefix", &prefix)],
                 |row| row.get(0),
             )?;
 
@@ -450,12 +450,12 @@ impl PMDB {
                 "UPDATE local_repository
                     SET mtime = :mtime,
                         ntime = :ntime
-                  WHERE pkgdb = :pkgdb",
+                  WHERE prefix = :prefix",
             )?;
             stmt.execute_named(&[
                 (":mtime", &mtime),
                 (":ntime", &ntime),
-                (":pkgdb", &pkgdb),
+                (":prefix", &prefix),
             ])?;
         }
 
@@ -505,12 +505,36 @@ impl PMDB {
     }
 
     /*
-     * Support functions for "avail".
+     * Support functions for "avail" and "list".
      */
+    pub fn get_local_pkgs_by_prefix(
+        &mut self,
+        prefix: &str,
+    ) -> rusqlite::Result<Vec<ListPackage>> {
+        let mut result = Vec::new();
+        let mut stmt = self.db.prepare(
+            "
+                SELECT pkgname, comment
+                  FROM local_pkg
+            INNER JOIN local_repository
+                    ON local_repository.id = local_pkg.repository_id
+                 WHERE local_repository.prefix = :prefix
+              ORDER BY pkgname ASC",
+        )?;
+        let rows =
+            stmt.query_map_named(&[(":prefix", &prefix)], |row| ListPackage {
+                pkgname: row.get(0),
+                comment: row.get(1),
+            })?;
+        for row in rows {
+            result.push(row?)
+        }
+        Ok(result)
+    }
     pub fn get_remote_pkgs_by_prefix(
         &mut self,
         prefix: &str,
-    ) -> rusqlite::Result<Vec<AvailablePackage>> {
+    ) -> rusqlite::Result<Vec<ListPackage>> {
         let mut result = Vec::new();
         let mut stmt = self.db.prepare(
             "
@@ -520,12 +544,11 @@ impl PMDB {
                     ON remote_repository.id = remote_pkg.repository_id
                  WHERE remote_repository.prefix = :prefix",
         )?;
-        let rows = stmt.query_map_named(&[(":prefix", &prefix)], |row| {
-            AvailablePackage {
+        let rows =
+            stmt.query_map_named(&[(":prefix", &prefix)], |row| ListPackage {
                 pkgname: row.get(0),
                 comment: row.get(1),
-            }
-        })?;
+            })?;
         for row in rows {
             result.push(row?)
         }
