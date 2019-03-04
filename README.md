@@ -22,8 +22,9 @@ Enhancements compared to pkgin:
 | Command |    pm |  pkgin | Improvement |
 |--------:|------:|-------:|------------:|
 |   avail | 0.20s |  0.75s |      **4x** |
+|    list | 0.05s |  0.45s |      **9x** |
 |  search | 0.15s |  0.80s |      **5x** |
-|  update | 3.75s | 41.75s |     **11x** |
+|  update | 3.35s | 40.25s |     **12x** |
 
 Disadvantages:
 
