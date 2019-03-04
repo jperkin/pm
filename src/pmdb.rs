@@ -132,6 +132,26 @@ impl PMDB {
                 summary_suffix      TEXT,
                 mtime               INTEGER
             );
+            CREATE TABLE local_pkg (
+                id                  INTEGER PRIMARY KEY,
+                repository_id       INTEGER,
+                build_date          TEXT,
+                categories          TEXT,
+                comment             TEXT,
+                description         TEXT,
+                homepage            TEXT NULL,
+                license             TEXT NULL,
+                opsys               TEXT,
+                os_version          TEXT,
+                pkg_options         TEXT NULL,
+                pkgbase             TEXT,
+                pkgname             TEXT,
+                pkgpath             TEXT,
+                pkgtools_version    TEXT,
+                pkgversion          TEXT,
+                preserve            INTEGER,
+                size_pkg            INTEGER
+            );
             CREATE TABLE remote_pkg (
                 id                  INTEGER PRIMARY KEY,
                 repository_id       INTEGER,
@@ -227,6 +247,51 @@ impl PMDB {
         }
     }
 
+    fn insert_local_pkgs(
+        tx: &rusqlite::Transaction,
+        repo_id: i64,
+        pkgs: &[SummaryEntry],
+    ) -> rusqlite::Result<()> {
+        let mut stmt = tx.prepare(
+            "INSERT INTO local_pkg
+                    (repository_id, build_date, categories, comment,
+                     description, homepage, license, opsys, os_version,
+                     pkg_options, pkgbase, pkgname, pkgpath,
+                     pkgtools_version, pkgversion, size_pkg)
+             VALUES (:repo_id, :build_date, :categories, :comment,
+                     :description, :homepage, :license, :opsys, :os_version,
+                     :pkg_options, :pkgbase, :pkgname, :pkgpath,
+                     :pkgtools_version, :pkgversion, :size_pkg)",
+        )?;
+
+        for p in pkgs {
+            /*
+             * These values have all been checked earlier when inserted so
+             * we are safe to unwrap.
+             */
+            stmt.execute_named(&[
+                (":repo_id", &repo_id),
+                (":build_date", &p.build_date()),
+                (":categories", &p.categories().join(" ")),
+                (":comment", &p.comment()),
+                (":description", &p.description().join("\n")),
+                (":homepage", &p.homepage()),
+                (":license", &p.license()),
+                (":opsys", &p.opsys()),
+                (":os_version", &p.os_version()),
+                (":pkg_options", &p.pkg_options()),
+                (":pkgbase", &p.pkgbase()),
+                (":pkgname", &p.pkgname()),
+                (":pkgpath", &p.pkgpath()),
+                (":pkgtools_version", &p.pkgtools_version()),
+                (":pkgversion", &p.pkgversion()),
+                (":size_pkg", &(p.size_pkg().unwrap())),
+            ])?;
+        }
+
+        Ok(())
+    }
+
     fn insert_remote_pkgs(
         tx: &rusqlite::Transaction,
         repo_id: i64,
@@ -271,6 +336,18 @@ impl PMDB {
         }
 
         Ok(())
+    }
+
+    fn delete_local_pkgs(
+        tx: &rusqlite::Transaction,
+        repo_id: i64,
+    ) -> rusqlite::Result<usize> {
+        let mut stmt = tx.prepare(
+            "DELETE
+               FROM local_pkg
+              WHERE repository_id = :repo_id",
+        )?;
+        stmt.execute_named(&[(":repo_id", &repo_id)])
     }
 
     fn delete_remote_pkgs(
