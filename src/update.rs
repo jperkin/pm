@@ -84,14 +84,14 @@ pub fn run(
                  */
                 let mut sumstr = SummaryStream::new();
 
-                if let Some(r) = db.get_repository(repo.url())? {
+                if let Some(r) = db.get_remote_repository(repo.url())? {
                     if r.up_to_date(last_modified, e) {
                         println!("{} is up to date", repo.url());
                     } else {
                         println!("Updating {}", repo.url());
                         sumstr.slurp(&e, res)?;
                         sumstr.parse();
-                        db.update_repository(
+                        db.update_remote_repository(
                             repo.url(),
                             last_modified,
                             e,
@@ -102,7 +102,7 @@ pub fn run(
                     println!("Creating {}", repo.url());
                     sumstr.slurp(&e, res)?;
                     sumstr.parse();
-                    db.insert_repository(
+                    db.insert_remote_repository(
                         repo.url(),
                         repo.prefix(),
                         last_modified,

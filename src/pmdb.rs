@@ -26,16 +26,27 @@ use std::fs;
 #[derive(Debug)]
 pub struct PMDB {
     db: Connection,
-    repositories: Vec<Repository>,
+    repositories: Vec<RemoteRepository>,
 }
 
 #[derive(Debug)]
-pub struct Repository {
+pub struct LocalRepository {
+    pkgdb: String,
+    mtime: i64,
+    ntime: i32,
+    need_update: bool,
+}
+
+#[derive(Debug)]
+pub struct RemoteRepository {
     url: String,
     mtime: i64,
     summary_suffix: String,
     need_update: bool,
 }
+
+#[cfg_attr(feature = "cargo-clippy", allow(clippy::unreadable_literal))]
+const DB_VERSION: i64 = 20190303;
 
 impl PMDB {
     /*
@@ -57,6 +68,9 @@ impl PMDB {
 
         if !PMDB::is_created(&db)? {
             PMDB::create_default_tables(&mut db)?;
+        } else if !PMDB::is_current(&db)? {
+            PMDB::drop_default_tables(&mut db)?;
+            PMDB::create_default_tables(&mut db)?;
         }
 
         Ok(PMDB {
@@ -66,19 +80,29 @@ impl PMDB {
     }
 
     /*
-     * Test for the existance of the "repositories" table to determine if we
-     * need to create the initial set of tables or not.
+     * Test for the existance of the "metadata" table to determine if
+     * we need to create the initial set of tables or not.
      */
     fn is_created(db: &Connection) -> rusqlite::Result<bool> {
         let count: i64 = db.query_row(
             "SELECT COUNT(*)
                FROM sqlite_master
               WHERE type='table'
-                AND name='repositories'",
+                AND name='metadata'",
             rusqlite::NO_PARAMS,
             |r| r.get(0),
         )?;
         Ok(count > 0)
+    }
+
+    fn is_current(db: &Connection) -> rusqlite::Result<bool> {
+        let current: i64 = db.query_row(
+            "SELECT version
+               FROM metadata",
+            rusqlite::NO_PARAMS,
+            |r| r.get(0),
+        )?;
+        Ok(current == DB_VERSION)
     }
 
     /*
@@ -92,7 +116,16 @@ impl PMDB {
         let tx = db.transaction()?;
         tx.execute_batch(
             "
-            CREATE TABLE repositories (
+            CREATE TABLE metadata (
+                version             INTEGER
+            );
+            CREATE TABLE local_repository (
+                id                  INTEGER PRIMARY KEY,
+                pkgdb               TEXT UNIQUE,
+                mtime               INTEGER,
+                ntime               INTEGER
+            );
+            CREATE TABLE remote_repository (
                 id                  INTEGER PRIMARY KEY,
                 prefix              TEXT,
                 url                 TEXT UNIQUE,
@@ -121,23 +154,69 @@ impl PMDB {
             );
             ",
         )?;
+        {
+            let mut stmt = tx.prepare(
+                "REPLACE INTO metadata
+                         (version)
+                  VALUES (:version)",
+            )?;
+            stmt.execute_named(&[(":version", &DB_VERSION)])?;
+        }
         tx.commit()
     }
 
-    pub fn get_repository(
+    pub fn drop_default_tables(db: &mut Connection) -> rusqlite::Result<()> {
+        let tx = db.transaction()?;
+        tx.execute_batch(
+            "
+            DROP TABLE IF EXISTS metadata;
+            DROP TABLE IF EXISTS local_repository;
+            DROP TABLE IF EXISTS remote_repository;
+            DROP TABLE IF EXISTS local_pkg;
+            DROP TABLE IF EXISTS remote_pkg;
+        ",
+        )?;
+        tx.commit()
+    }
+
+    pub fn get_local_repository(
+        &self,
+        pkgdb: &str,
+    ) -> rusqlite::Result<Option<LocalRepository>> {
+        let mut stmt = self.db.prepare(
+            "SELECT mtime, ntime
+               FROM local_repository
+              WHERE pkgdb = ?",
+        )?;
+        let mut rows = stmt.query(&[pkgdb])?;
+        match rows.next() {
+            Some(row) => {
+                let row = row?;
+                Ok(Some(LocalRepository {
+                    pkgdb: pkgdb.to_string(),
+                    mtime: row.get(0),
+                    ntime: row.get(1),
+                    need_update: false,
+                }))
+            }
+            None => Ok(None),
+        }
+    }
+
+    pub fn get_remote_repository(
         &self,
         url: &str,
-    ) -> rusqlite::Result<Option<Repository>> {
+    ) -> rusqlite::Result<Option<RemoteRepository>> {
         let mut stmt = self.db.prepare(
             "SELECT mtime, summary_suffix
-               FROM repositories
+               FROM remote_repository
               WHERE url = ?",
         )?;
         let mut rows = stmt.query(&[url])?;
         match rows.next() {
             Some(row) => {
                 let row = row?;
-                Ok(Some(Repository {
+                Ok(Some(RemoteRepository {
                     url: url.to_string(),
                     mtime: row.get(0),
                     summary_suffix: row.get(1),
@@ -206,7 +285,35 @@ impl PMDB {
         stmt.execute_named(&[(":repo_id", &repo_id)])
     }
 
-    pub fn insert_repository(
+    pub fn insert_local_repository(
+        &mut self,
+        pkgdb: &str,
+        mtime: i64,
+        ntime: i32,
+        pkgs: &[SummaryEntry],
+    ) -> rusqlite::Result<()> {
+        let tx = self.db.transaction()?;
+
+        {
+            let mut stmt = tx.prepare(
+                "INSERT INTO local_repository
+                        (pkgdb, mtime, ntime)
+                 VALUES (:pkgdb, :mtime, :ntime)",
+            )?;
+            stmt.execute_named(&[
+                (":pkgdb", &pkgdb),
+                (":mtime", &mtime),
+                (":ntime", &ntime),
+            ])?;
+
+            let repo_id = tx.last_insert_rowid();
+            PMDB::insert_local_pkgs(&tx, repo_id, &pkgs)?;
+        }
+
+        tx.commit()
+    }
+
+    pub fn insert_remote_repository(
         &mut self,
         url: &str,
         prefix: &str,
@@ -218,9 +325,9 @@ impl PMDB {
 
         {
             let mut stmt = tx.prepare(
-                "INSERT INTO repositories
-                             (url, prefix, mtime, summary_suffix)
-                      VALUES (:url, :prefix, :mtime, :summary_suffix)",
+                "INSERT INTO remote_repository
+                        (url, prefix, mtime, summary_suffix)
+                 VALUES (:url, :prefix, :mtime, :summary_suffix)",
             )?;
             stmt.execute_named(&[
                 (":url", &url),
@@ -236,7 +343,49 @@ impl PMDB {
         tx.commit()
     }
 
-    pub fn update_repository(
+    pub fn update_local_repository(
+        &mut self,
+        pkgdb: &str,
+        mtime: i64,
+        ntime: i32,
+        pkgs: &[SummaryEntry],
+    ) -> rusqlite::Result<()> {
+        let tx = self.db.transaction()?;
+
+        {
+            let repo_id = tx.query_row_named(
+                "SELECT id
+                   FROM local_repository
+                  WHERE pkgdb = :pkgdb",
+                &[(":pkgdb", &pkgdb)],
+                |row| row.get(0),
+            )?;
+
+            /*
+             * Trying to update a repository in-place would just be a
+             * nightmare.  Dropping and re-inserting is a lot simpler and
+             * faster.
+             */
+            PMDB::delete_local_pkgs(&tx, repo_id)?;
+            PMDB::insert_local_pkgs(&tx, repo_id, &pkgs)?;
+
+            let mut stmt = tx.prepare(
+                "UPDATE local_repository
+                    SET mtime = :mtime,
+                        ntime = :ntime
+                  WHERE pkgdb = :pkgdb",
+            )?;
+            stmt.execute_named(&[
+                (":mtime", &mtime),
+                (":ntime", &ntime),
+                (":pkgdb", &pkgdb),
+            ])?;
+        }
+
+        tx.commit()
+    }
+
+    pub fn update_remote_repository(
         &mut self,
         url: &str,
         mtime: i64,
@@ -248,7 +397,7 @@ impl PMDB {
         {
             let repo_id = tx.query_row_named(
                 "SELECT id
-                   FROM repositories
+                   FROM remote_repository
                   WHERE url = :url",
                 &[(":url", &url)],
                 |row| row.get(0),
@@ -263,7 +412,7 @@ impl PMDB {
             PMDB::insert_remote_pkgs(&tx, repo_id, &pkgs)?;
 
             let mut stmt = tx.prepare(
-                "UPDATE repositories
+                "UPDATE remote_repository
                     SET mtime = :mtime,
                         summary_suffix = :summary_suffix
                   WHERE url = :url",
@@ -290,9 +439,9 @@ impl PMDB {
             "
                 SELECT pkgname, comment
                   FROM remote_pkg
-            INNER JOIN repositories
-                    ON repositories.id = remote_pkg.repository_id
-                 WHERE repositories.prefix = :prefix",
+            INNER JOIN remote_repository
+                    ON remote_repository.id = remote_pkg.repository_id
+                 WHERE remote_repository.prefix = :prefix",
         )?;
         let rows = stmt.query_map_named(&[(":prefix", &prefix)], |row| {
             AvailablePackage {
@@ -307,7 +456,13 @@ impl PMDB {
     }
 }
 
-impl Repository {
+impl LocalRepository {
+    pub fn up_to_date(&self, mtime: i64, ntime: i32) -> bool {
+        self.mtime == mtime && self.ntime == ntime
+    }
+}
+
+impl RemoteRepository {
     pub fn up_to_date(&self, mtime: i64, summary_suffix: &str) -> bool {
         self.mtime == mtime && self.summary_suffix == summary_suffix
     }
