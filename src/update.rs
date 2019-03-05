@@ -46,6 +46,7 @@ fn get_summary_extensions(repo: &config::RepoConfig) -> Vec<&str> {
  */
 fn get_local_packages(
     cfg: &config::Config,
+    pkgdb: &str,
 ) -> Result<SummaryStream, Box<std::error::Error>> {
     /*
      * Update local pkg repository if necessary.
@@ -61,6 +62,18 @@ fn get_local_packages(
     let mut pinfostr = SummaryStream::new();
     std::io::copy(&mut reader, &mut pinfostr)?;
     pinfostr.parse();
+    /*
+     * Look for "automatic" packages (those that have been pulled in as a
+     * dependency).  This is a bit hacky, and relies upon the fact that
+     * pkg_install only uses this file for automatic=yes right now.
+     */
+    for pkg in pinfostr.entries_mut() {
+        let autofile = format!("{}/{}/+INSTALLED_INFO", pkgdb, pkg.pkgname());
+        let autofile = PathBuf::from(autofile);
+        if autofile.exists() {
+            pkg.set_automatic();
+        }
+    }
     Ok(pinfostr)
 }
 
@@ -96,7 +109,7 @@ fn update_local_repository(
             return Ok(());
         } else {
             println!("Refreshing packages installed under {}", cfg.prefix());
-            let pkgs: SummaryStream = get_local_packages(&cfg)?;
+            let pkgs: SummaryStream = get_local_packages(&cfg, &pkgdb_dir)?;
             db.update_local_repository(
                 cfg.prefix(),
                 pkgdb_mtime_sec,
@@ -106,7 +119,7 @@ fn update_local_repository(
         }
     } else {
         println!("Recording packages installed under {}", cfg.prefix());
-        let pkgs: SummaryStream = get_local_packages(&cfg)?;
+        let pkgs: SummaryStream = get_local_packages(&cfg, &pkgdb_dir)?;
         db.insert_local_repository(
             cfg.prefix(),
             pkgdb_mtime_sec,

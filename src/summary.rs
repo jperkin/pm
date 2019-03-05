@@ -31,6 +31,7 @@ pub struct SummaryStream {
  */
 #[derive(Debug, Default)]
 pub struct SummaryEntry {
+    automatic: Option<i64>, // Not part of pkg_summary(5)
     build_date: String,
     categories: Vec<String>,
     comment: String,
@@ -63,11 +64,13 @@ impl SummaryEntry {
         let sum: SummaryEntry = Default::default();
         sum
     }
-
     /*
      * XXX: Some are Strings, some are str due to unwrapping Option, I need to
      * figure out what's best here depending on how they will be used.
      */
+    pub fn automatic(&self) -> i64 {
+        self.automatic.unwrap_or(0)
+    }
     pub fn build_date(&self) -> &String {
         &self.build_date
     }
@@ -220,6 +223,14 @@ impl SummaryEntry {
     }
 
     /*
+     * Not a member of pkg_summary(5) but this is the best place to store this
+     * information at present.
+     */
+    pub fn set_automatic(&mut self) {
+        self.automatic = Some(1);
+    }
+
+    /*
      * Ensure required fields (as per pkg_summary(5)) are set
      */
     pub fn validate(&self) -> Result<(), &'static str> {
@@ -301,6 +312,10 @@ impl SummaryStream {
 
     pub fn entries(&self) -> &Vec<SummaryEntry> {
         &self.entries
+    }
+
+    pub fn entries_mut(&mut self) -> &mut Vec<SummaryEntry> {
+        &mut self.entries
     }
 
     pub fn parse(&mut self) {

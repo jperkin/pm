@@ -46,7 +46,7 @@ pub struct RemoteRepository {
 }
 
 #[cfg_attr(feature = "cargo-clippy", allow(clippy::unreadable_literal))]
-const DB_VERSION: i64 = 20190304;
+const DB_VERSION: i64 = 20190305;
 
 impl PMDB {
     /*
@@ -117,60 +117,108 @@ impl PMDB {
         tx.execute_batch(
             "
             CREATE TABLE metadata (
-                version             INTEGER
+                version             INTEGER NOT NULL
             );
             CREATE TABLE local_repository (
                 id                  INTEGER PRIMARY KEY,
-                prefix              TEXT UNIQUE,
-                mtime               INTEGER,
-                ntime               INTEGER
-            );
-            CREATE TABLE remote_repository (
-                id                  INTEGER PRIMARY KEY,
-                prefix              TEXT,
-                url                 TEXT UNIQUE,
-                summary_suffix      TEXT,
-                mtime               INTEGER
+                prefix              TEXT NOT NULL UNIQUE,
+                mtime               INTEGER NOT NULL,
+                ntime               INTEGER NOT NULL
             );
             CREATE TABLE local_pkg (
                 id                  INTEGER PRIMARY KEY,
-                repository_id       INTEGER,
-                build_date          TEXT,
-                categories          TEXT,
-                comment             TEXT,
-                description         TEXT,
-                homepage            TEXT NULL,
-                license             TEXT NULL,
-                opsys               TEXT,
-                os_version          TEXT,
-                pkg_options         TEXT NULL,
-                pkgbase             TEXT,
-                pkgname             TEXT,
-                pkgpath             TEXT,
-                pkgtools_version    TEXT,
-                pkgversion          TEXT,
-                preserve            INTEGER,
-                size_pkg            INTEGER
+                repository_id       INTEGER NOT NULL,
+                automatic           INTEGER NOT NULL,
+                build_date          TEXT NOT NULL,
+                categories          TEXT NOT NULL,
+                comment             TEXT NOT NULL,
+                description         TEXT NOT NULL,
+                homepage            TEXT,
+                license             TEXT,
+                opsys               TEXT NOT NULL,
+                os_version          TEXT NOT NULL,
+                pkg_options         TEXT,
+                pkgbase             TEXT NOT NULL,
+                pkgname             TEXT NOT NULL,
+                pkgpath             TEXT NOT NULL,
+                pkgtools_version    TEXT NOT NULL,
+                pkgversion          TEXT NOT NULL,
+                size_pkg            INTEGER NOT NULL
+            );
+            CREATE TABLE local_conflicts (
+                id                  INTEGER PRIMARY KEY,
+                repository_id       INTEGER NOT NULL,
+                pkg_id              INTEGER NOT NULL,
+                conflicts           TEXT NOT NULL
+            );
+            CREATE TABLE local_depends (
+                id                  INTEGER PRIMARY KEY,
+                repository_id       INTEGER NOT NULL,
+                pkg_id              INTEGER NOT NULL,
+                depends             TEXT NOT NULL
+            );
+            CREATE TABLE local_provides (
+                id                  INTEGER PRIMARY KEY,
+                repository_id       INTEGER NOT NULL,
+                pkg_id              INTEGER NOT NULL,
+                provides            TEXT NOT NULL
+            );
+            CREATE TABLE local_requires (
+                id                  INTEGER PRIMARY KEY,
+                repository_id       INTEGER NOT NULL,
+                pkg_id              INTEGER NOT NULL,
+                requires            TEXT NOT NULL
+            );
+            CREATE TABLE remote_repository (
+                id                  INTEGER PRIMARY KEY,
+                prefix              TEXT NOT NULL,
+                url                 TEXT NOT NULL UNIQUE,
+                summary_suffix      TEXT NOT NULL,
+                mtime               INTEGER NOT NULL
             );
             CREATE TABLE remote_pkg (
                 id                  INTEGER PRIMARY KEY,
-                repository_id       INTEGER,
-                build_date          TEXT,
-                categories          TEXT,
-                comment             TEXT,
-                description         TEXT,
-                file_size           INTEGER,
-                homepage            TEXT NULL,
-                license             TEXT NULL,
-                opsys               TEXT,
-                os_version          TEXT,
-                pkg_options         TEXT NULL,
-                pkgbase             TEXT,
-                pkgname             TEXT,
-                pkgpath             TEXT,
-                pkgtools_version    TEXT,
-                pkgversion          TEXT,
-                size_pkg            INTEGER
+                repository_id       INTEGER NOT NULL,
+                build_date          TEXT NOT NULL,
+                categories          TEXT NOT NULL,
+                comment             TEXT NOT NULL,
+                description         TEXT NOT NULL,
+                file_size           INTEGER NOT NULL,
+                homepage            TEXT,
+                license             TEXT,
+                opsys               TEXT NOT NULL,
+                os_version          TEXT NOT NULL,
+                pkg_options         TEXT,
+                pkgbase             TEXT NOT NULL,
+                pkgname             TEXT NOT NULL,
+                pkgpath             TEXT NOT NULL,
+                pkgtools_version    TEXT NOT NULL,
+                pkgversion          TEXT NOT NULL,
+                size_pkg            INTEGER NOT NULL
+            );
+            CREATE TABLE remote_conflicts (
+                id                  INTEGER PRIMARY KEY,
+                repository_id       INTEGER NOT NULL,
+                pkg_id              INTEGER NOT NULL,
+                conflicts           TEXT NOT NULL
+            );
+            CREATE TABLE remote_depends (
+                id                  INTEGER PRIMARY KEY,
+                repository_id       INTEGER NOT NULL,
+                pkg_id              INTEGER NOT NULL,
+                depends             TEXT NOT NULL
+            );
+            CREATE TABLE remote_provides (
+                id                  INTEGER PRIMARY KEY,
+                repository_id       INTEGER NOT NULL,
+                pkg_id              INTEGER NOT NULL,
+                provides            TEXT NOT NULL
+            );
+            CREATE TABLE remote_requires (
+                id                  INTEGER PRIMARY KEY,
+                repository_id       INTEGER NOT NULL,
+                pkg_id              INTEGER NOT NULL,
+                requires            TEXT NOT NULL
             );
             ",
         )?;
@@ -249,28 +297,48 @@ impl PMDB {
 
     fn insert_local_pkgs(
         tx: &rusqlite::Transaction,
-        repo_id: i64,
+        repository_id: i64,
         pkgs: &[SummaryEntry],
     ) -> rusqlite::Result<()> {
-        let mut stmt = tx.prepare(
+        let mut insert_pkg = tx.prepare(
             "INSERT INTO local_pkg
-                    (repository_id, build_date, categories, comment,
-                     description, homepage, license, opsys, os_version,
-                     pkg_options, pkgbase, pkgname, pkgpath,
+                    (repository_id, automatic, build_date, categories,
+                     comment, description, homepage, license, opsys,
+                     os_version, pkg_options, pkgbase, pkgname, pkgpath,
                      pkgtools_version, pkgversion, size_pkg)
-             VALUES (:repo_id, :build_date, :categories, :comment,
-                     :description, :homepage, :license, :opsys, :os_version,
-                     :pkg_options, :pkgbase, :pkgname, :pkgpath,
+             VALUES (:repository_id, :automatic, :build_date, :categories,
+                     :comment, :description, :homepage, :license, :opsys,
+                     :os_version, :pkg_options, :pkgbase, :pkgname, :pkgpath,
                      :pkgtools_version, :pkgversion, :size_pkg)",
         )?;
-
+        let mut insert_conflicts = tx.prepare(
+            "INSERT INTO local_conflicts
+                    (repository_id, pkg_id, conflicts)
+             VALUES (:repository_id, :pkg_id, :conflicts)",
+        )?;
+        let mut insert_depends = tx.prepare(
+            "INSERT INTO local_depends
+                    (repository_id, pkg_id, depends)
+             VALUES (:repository_id, :pkg_id, :depends)",
+        )?;
+        let mut insert_provides = tx.prepare(
+            "INSERT INTO local_provides
+                    (repository_id, pkg_id, provides)
+             VALUES (:repository_id, :pkg_id, :provides)",
+        )?;
+        let mut insert_requires = tx.prepare(
+            "INSERT INTO local_requires
+                    (repository_id, pkg_id, requires)
+             VALUES (:repository_id, :pkg_id, :requires)",
+        )?;
         for p in pkgs {
             /*
              * These values have all been checked earlier when inserted so
              * we are safe to unwrap.
              */
-            stmt.execute_named(&[
-                (":repo_id", &repo_id),
+            insert_pkg.execute_named(&[
+                (":repository_id", &repository_id),
+                (":automatic", &p.automatic()),
                 (":build_date", &p.build_date()),
                 (":categories", &p.categories().join(" ")),
                 (":comment", &p.comment()),
@@ -287,26 +355,82 @@ impl PMDB {
                 (":pkgversion", &p.pkgversion()),
                 (":size_pkg", &(p.size_pkg().unwrap())),
             ])?;
+            let pkg_id = tx.last_insert_rowid();
+            if !p.conflicts().is_empty() {
+                for conflicts in p.conflicts() {
+                    insert_conflicts.execute_named(&[
+                        (":repository_id", &repository_id),
+                        (":pkg_id", &pkg_id),
+                        (":conflicts", &conflicts),
+                    ])?;
+                }
+            }
+            if !p.depends().is_empty() {
+                for depends in p.depends() {
+                    insert_depends.execute_named(&[
+                        (":repository_id", &repository_id),
+                        (":pkg_id", &pkg_id),
+                        (":depends", &depends),
+                    ])?;
+                }
+            }
+            if !p.provides().is_empty() {
+                for provides in p.provides() {
+                    insert_provides.execute_named(&[
+                        (":repository_id", &repository_id),
+                        (":pkg_id", &pkg_id),
+                        (":provides", &provides),
+                    ])?;
+                }
+            }
+            if !p.requires().is_empty() {
+                for requires in p.requires() {
+                    insert_requires.execute_named(&[
+                        (":repository_id", &repository_id),
+                        (":pkg_id", &pkg_id),
+                        (":requires", &requires),
+                    ])?;
+                }
+            }
         }
-
         Ok(())
     }
 
     fn insert_remote_pkgs(
         tx: &rusqlite::Transaction,
-        repo_id: i64,
+        repository_id: i64,
         pkgs: &[SummaryEntry],
     ) -> rusqlite::Result<()> {
-        let mut stmt = tx.prepare(
+        let mut insert_pkg = tx.prepare(
             "INSERT INTO remote_pkg
                     (repository_id, build_date, categories, comment,
                      description, file_size, homepage, license, opsys,
                      os_version, pkg_options, pkgbase, pkgname, pkgpath,
                      pkgtools_version, pkgversion, size_pkg)
-             VALUES (:repo_id, :build_date, :categories, :comment,
+             VALUES (:repository_id, :build_date, :categories, :comment,
                      :description, :file_size, :homepage, :license, :opsys,
                      :os_version, :pkg_options, :pkgbase, :pkgname, :pkgpath,
                      :pkgtools_version, :pkgversion, :size_pkg)",
+        )?;
+        let mut insert_conflicts = tx.prepare(
+            "INSERT INTO remote_conflicts
+                    (repository_id, pkg_id, conflicts)
+             VALUES (:repository_id, :pkg_id, :conflicts)",
+        )?;
+        let mut insert_depends = tx.prepare(
+            "INSERT INTO remote_depends
+                    (repository_id, pkg_id, depends)
+             VALUES (:repository_id, :pkg_id, :depends)",
+        )?;
+        let mut insert_provides = tx.prepare(
+            "INSERT INTO remote_provides
+                    (repository_id, pkg_id, provides)
+             VALUES (:repository_id, :pkg_id, :provides)",
+        )?;
+        let mut insert_requires = tx.prepare(
+            "INSERT INTO remote_requires
+                    (repository_id, pkg_id, requires)
+             VALUES (:repository_id, :pkg_id, :requires)",
         )?;
 
         for p in pkgs {
@@ -314,8 +438,8 @@ impl PMDB {
              * These values have all been checked earlier when inserted so
              * we are safe to unwrap.
              */
-            stmt.execute_named(&[
-                (":repo_id", &repo_id),
+            insert_pkg.execute_named(&[
+                (":repository_id", &repository_id),
                 (":build_date", &p.build_date()),
                 (":categories", &p.categories().join(" ")),
                 (":comment", &p.comment()),
@@ -333,33 +457,87 @@ impl PMDB {
                 (":pkgversion", &p.pkgversion()),
                 (":size_pkg", &(p.size_pkg().unwrap())),
             ])?;
+            let pkg_id = tx.last_insert_rowid();
+            if !p.conflicts().is_empty() {
+                for conflicts in p.conflicts() {
+                    insert_conflicts.execute_named(&[
+                        (":repository_id", &repository_id),
+                        (":pkg_id", &pkg_id),
+                        (":conflicts", &conflicts),
+                    ])?;
+                }
+            }
+            if !p.depends().is_empty() {
+                for depends in p.depends() {
+                    insert_depends.execute_named(&[
+                        (":repository_id", &repository_id),
+                        (":pkg_id", &pkg_id),
+                        (":depends", &depends),
+                    ])?;
+                }
+            }
+            if !p.provides().is_empty() {
+                for provides in p.provides() {
+                    insert_provides.execute_named(&[
+                        (":repository_id", &repository_id),
+                        (":pkg_id", &pkg_id),
+                        (":provides", &provides),
+                    ])?;
+                }
+            }
+            if !p.requires().is_empty() {
+                for requires in p.requires() {
+                    insert_requires.execute_named(&[
+                        (":repository_id", &repository_id),
+                        (":pkg_id", &pkg_id),
+                        (":requires", &requires),
+                    ])?;
+                }
+            }
         }
-
         Ok(())
     }
 
     fn delete_local_pkgs(
         tx: &rusqlite::Transaction,
-        repo_id: i64,
-    ) -> rusqlite::Result<usize> {
-        let mut stmt = tx.prepare(
-            "DELETE
-               FROM local_pkg
-              WHERE repository_id = :repo_id",
-        )?;
-        stmt.execute_named(&[(":repo_id", &repo_id)])
+        repository_id: i64,
+    ) -> rusqlite::Result<()> {
+        let delete_tables = [
+            "local_pkg",
+            "local_conflicts",
+            "local_depends",
+            "local_provides",
+            "local_requires",
+        ];
+        for table in &delete_tables {
+            let sql = format!(
+                "DELETE FROM {} WHERE repository_id = :repository_id",
+                &table
+            );
+            tx.execute_named(&sql, &[(":repository_id", &repository_id)])?;
+        }
+        Ok(())
     }
 
     fn delete_remote_pkgs(
         tx: &rusqlite::Transaction,
-        repo_id: i64,
-    ) -> rusqlite::Result<usize> {
-        let mut stmt = tx.prepare(
-            "DELETE
-               FROM remote_pkg
-              WHERE repository_id = :repo_id",
-        )?;
-        stmt.execute_named(&[(":repo_id", &repo_id)])
+        repository_id: i64,
+    ) -> rusqlite::Result<()> {
+        let delete_tables = [
+            "remote_pkg",
+            "remote_conflicts",
+            "remote_depends",
+            "remote_provides",
+            "remote_requires",
+        ];
+        for table in &delete_tables {
+            let sql = format!(
+                "DELETE FROM {} WHERE repository_id = :repository_id",
+                &table
+            );
+            tx.execute_named(&sql, &[(":repository_id", &repository_id)])?;
+        }
+        Ok(())
     }
 
     pub fn insert_local_repository(
@@ -383,8 +561,8 @@ impl PMDB {
                 (":ntime", &ntime),
             ])?;
 
-            let repo_id = tx.last_insert_rowid();
-            PMDB::insert_local_pkgs(&tx, repo_id, &pkgs)?;
+            let repository_id = tx.last_insert_rowid();
+            PMDB::insert_local_pkgs(&tx, repository_id, &pkgs)?;
         }
 
         tx.commit()
@@ -413,8 +591,8 @@ impl PMDB {
                 (":summary_suffix", &summary_suffix),
             ])?;
 
-            let repo_id = tx.last_insert_rowid();
-            PMDB::insert_remote_pkgs(&tx, repo_id, &pkgs)?;
+            let repository_id = tx.last_insert_rowid();
+            PMDB::insert_remote_pkgs(&tx, repository_id, &pkgs)?;
         }
 
         tx.commit()
@@ -430,7 +608,7 @@ impl PMDB {
         let tx = self.db.transaction()?;
 
         {
-            let repo_id = tx.query_row_named(
+            let repository_id = tx.query_row_named(
                 "SELECT id
                    FROM local_repository
                   WHERE prefix = :prefix",
@@ -443,8 +621,8 @@ impl PMDB {
              * nightmare.  Dropping and re-inserting is a lot simpler and
              * faster.
              */
-            PMDB::delete_local_pkgs(&tx, repo_id)?;
-            PMDB::insert_local_pkgs(&tx, repo_id, &pkgs)?;
+            PMDB::delete_local_pkgs(&tx, repository_id)?;
+            PMDB::insert_local_pkgs(&tx, repository_id, &pkgs)?;
 
             let mut stmt = tx.prepare(
                 "UPDATE local_repository
@@ -472,7 +650,7 @@ impl PMDB {
         let tx = self.db.transaction()?;
 
         {
-            let repo_id = tx.query_row_named(
+            let repository_id = tx.query_row_named(
                 "SELECT id
                    FROM remote_repository
                   WHERE url = :url",
@@ -485,8 +663,8 @@ impl PMDB {
              * nightmare.  Dropping and re-inserting is a lot simpler and
              * faster.
              */
-            PMDB::delete_remote_pkgs(&tx, repo_id)?;
-            PMDB::insert_remote_pkgs(&tx, repo_id, &pkgs)?;
+            PMDB::delete_remote_pkgs(&tx, repository_id)?;
+            PMDB::insert_remote_pkgs(&tx, repository_id, &pkgs)?;
 
             let mut stmt = tx.prepare(
                 "UPDATE remote_repository
