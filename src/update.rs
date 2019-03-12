@@ -33,7 +33,7 @@ use std::time::SystemTime;
  * otherwise use the default list which is ordered by compression size,
  * best to worst.  First match on the remote end wins.
  */
-fn get_summary_extensions(repo: &config::RepoConfig) -> Vec<&str> {
+fn get_summary_extensions(repo: &config::Repository) -> Vec<&str> {
     if let Some(extension) = repo.summary_extension() {
         vec![extension]
     } else {
@@ -45,13 +45,13 @@ fn get_summary_extensions(repo: &config::RepoConfig) -> Vec<&str> {
  * Get Vec of packages installed under the chosen prefix.
  */
 fn get_local_packages(
-    cfg: &config::Config,
+    prefix: &str,
     pkgdb: &str,
 ) -> Result<SummaryStream, Box<std::error::Error>> {
     /*
      * Update local pkg repository if necessary.
      */
-    let pkg_info = format!("{}/sbin/pkg_info", cfg.prefix());
+    let pkg_info = format!("{}/sbin/pkg_info", prefix);
     let pkg_info = PathBuf::from(pkg_info);
     let pinfo = Command::new(pkg_info.as_path())
         .args(&["-X", "-a"])
@@ -78,7 +78,7 @@ fn get_local_packages(
 }
 
 fn update_local_repository(
-    cfg: &config::Config,
+    prefix: &str,
     db: &mut PMDB,
 ) -> Result<(), Box<std::error::Error>> {
     /*
@@ -87,10 +87,10 @@ fn update_local_repository(
      *
      * XXX: This could probably be cleaner?
      */
-    let pkg_admin = format!("{}/sbin/pkg_admin", cfg.prefix());
+    let pkg_admin = format!("{}/sbin/pkg_admin", prefix);
     let pkg_admin = PathBuf::from(pkg_admin);
     if !pkg_admin.exists() {
-        eprintln!("ERROR: No pkg_install found under {}", cfg.prefix());
+        eprintln!("ERROR: No pkg_install found under {}", prefix);
         std::process::exit(1);
     }
     let pkgdb = Command::new(pkg_admin.as_path())
@@ -104,24 +104,24 @@ fn update_local_repository(
     let pkgdb_mtime_sec = pkgdb_mtime.as_secs() as i64;
     let pkgdb_mtime_nsec = pkgdb_mtime.subsec_nanos() as i32;
 
-    if let Some(r) = db.get_local_repository(cfg.prefix())? {
+    if let Some(r) = db.get_local_repository(prefix)? {
         if r.up_to_date(pkgdb_mtime_sec, pkgdb_mtime_nsec) {
             return Ok(());
         } else {
-            println!("Refreshing packages installed under {}", cfg.prefix());
-            let pkgs: SummaryStream = get_local_packages(&cfg, &pkgdb_dir)?;
+            println!("Refreshing packages installed under {}", prefix);
+            let pkgs: SummaryStream = get_local_packages(&prefix, &pkgdb_dir)?;
             db.update_local_repository(
-                cfg.prefix(),
+                prefix,
                 pkgdb_mtime_sec,
                 pkgdb_mtime_nsec,
                 pkgs.entries(),
             )?;
         }
     } else {
-        println!("Recording packages installed under {}", cfg.prefix());
-        let pkgs: SummaryStream = get_local_packages(&cfg, &pkgdb_dir)?;
+        println!("Recording packages installed under {}", prefix);
+        let pkgs: SummaryStream = get_local_packages(&prefix, &pkgdb_dir)?;
         db.insert_local_repository(
-            cfg.prefix(),
+            prefix,
             pkgdb_mtime_sec,
             pkgdb_mtime_nsec,
             pkgs.entries(),
@@ -131,84 +131,71 @@ fn update_local_repository(
     Ok(())
 }
 
-fn update_remote_repositories(
-    cfg: &config::Config,
+fn update_remote_repository(
+    repo: &config::Repository,
     db: &mut PMDB,
 ) -> Result<(), Box<std::error::Error>> {
     let client = reqwest::Client::new();
 
-    /*
-     * Get pkg_summary from each repository and check Last-Modified against
-     * our database.
-     */
-    if let Some(repos) = cfg.repositories() {
-        for repo in repos {
-            let summary_extensions = get_summary_extensions(&repo);
+    let summary_extensions = get_summary_extensions(&repo);
 
-            for e in summary_extensions {
-                if cfg.verbose() {
-                    println!("Trying summary_suffix={}", e);
-                }
+    for e in summary_extensions {
+        let sumurl = format!("{}/{}.{}", repo.url(), "pkg_summary", e);
 
-                let sumurl = format!("{}/{}.{}", repo.url(), "pkg_summary", e);
+        let res = reqwest::Client::get(&client, sumurl.as_str()).send()?;
 
-                let res =
-                    reqwest::Client::get(&client, sumurl.as_str()).send()?;
-
-                /* Not found, try next pkg_summary extension */
-                if !res.status().is_success() {
-                    continue;
-                }
-
-                /* XXX: this seems overly verbose, no simpler way? */
-                let last_modified: i64 = if let Some(lm) =
-                    res.headers().get(reqwest::header::LAST_MODIFIED)
-                {
-                    httpdate::parse_http_date(lm.to_str().unwrap())?
-                        .duration_since(SystemTime::UNIX_EPOCH)
-                        .unwrap()
-                        .as_secs() as i64
-                } else {
-                    continue;
-                };
-
-                /*
-                 * We now have a valid pkg_summary, check DB for existing entry
-                 * and insert/update as appropriate.
-                 */
-                let mut sumstr = SummaryStream::new();
-
-                if let Some(r) = db.get_remote_repository(repo.url())? {
-                    if r.up_to_date(last_modified, e) {
-                        println!("{} is up to date", repo.url());
-                    } else {
-                        println!("Updating {}", repo.url());
-                        sumstr.slurp(&e, res)?;
-                        sumstr.parse();
-                        db.update_remote_repository(
-                            repo.url(),
-                            last_modified,
-                            e,
-                            sumstr.entries(),
-                        )?;
-                    }
-                } else {
-                    println!("Creating {}", repo.url());
-                    sumstr.slurp(&e, res)?;
-                    sumstr.parse();
-                    db.insert_remote_repository(
-                        repo.url(),
-                        repo.prefix(),
-                        last_modified,
-                        e,
-                        sumstr.entries(),
-                    )?;
-                }
-
-                /* We're done, skip remaining suffixes */
-                break;
-            }
+        /* Not found, try next pkg_summary extension */
+        if !res.status().is_success() {
+            continue;
         }
+
+        /* XXX: this seems overly verbose, no simpler way? */
+        let last_modified: i64 = if let Some(lm) =
+            res.headers().get(reqwest::header::LAST_MODIFIED)
+        {
+            httpdate::parse_http_date(lm.to_str().unwrap())?
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_secs() as i64
+        } else {
+            continue;
+        };
+
+        /*
+         * We now have a valid pkg_summary, check DB for existing entry
+         * and insert/update as appropriate.
+         */
+        let mut sumstr = SummaryStream::new();
+
+        if let Some(r) = db.get_remote_repository(repo.url())? {
+            if r.up_to_date(last_modified, e) {
+                println!("{} is up to date", repo.url());
+            } else {
+                println!("Updating {}", repo.url());
+                sumstr.slurp(&e, res)?;
+                sumstr.parse();
+                db.update_remote_repository(
+                    repo.url(),
+                    last_modified,
+                    e,
+                    sumstr.entries(),
+                )?;
+            }
+        } else {
+            println!("Creating {}", repo.url());
+            sumstr.slurp(&e, res)?;
+            sumstr.parse();
+            db.insert_remote_repository(
+                repo.url(),
+                repo.prefix(),
+                last_modified,
+                e,
+                sumstr.entries(),
+            )?;
+        }
+
+        /* We're done, skip remaining suffixes */
+        break;
     }
     Ok(())
 }
@@ -217,8 +204,12 @@ pub fn run(
     cfg: &config::Config,
     db: &mut PMDB,
 ) -> Result<(), Box<std::error::Error>> {
-    update_local_repository(&cfg, db)?;
-    update_remote_repositories(&cfg, db)?;
+    for (prefix, repos) in cfg.prefixmap() {
+        update_local_repository(prefix, db)?;
+        for repo in repos {
+            update_remote_repository(repo, db)?;
+        }
+    }
 
     Ok(())
 }

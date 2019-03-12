@@ -90,13 +90,12 @@ fn main() -> Result<(), Box<std::error::Error>> {
     let cmd = OptArgs::from_args();
 
     /* Pass cmd so that the user can override the default with -c */
-    let mut cfg = config::Config::load(&cmd)?;
-    cfg.set_config_from_cmdline(&cmd);
+    let cfg = config::Config::load(&cmd)?;
 
     let pmdb_file = dirs::data_dir().unwrap().join("pm.db");
     let mut db = PMDB::new(&pmdb_file)?;
 
-    match cmd.subcmd {
+    match &cmd.subcmd {
         SubCmd::Avail => {
             list::avail(&cfg, &mut db)?;
         }

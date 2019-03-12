@@ -18,6 +18,7 @@
 
 use crate::OptArgs;
 use serde_derive::Deserialize;
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
@@ -29,43 +30,37 @@ extern crate toml;
  */
 #[derive(Debug)]
 pub struct Config {
-    file: ConfigFile,
     filename: PathBuf,
     prefix: String,
+    prefixmap: HashMap<String, Vec<Repository>>,
     verbose: bool,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct ConfigFile {
-    #[serde(default)]
-    default_prefix: Option<String>,
-    verbose: Option<bool>,
-    repository: Option<Vec<RepoConfig>>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct RepoConfig {
+#[derive(Clone, Debug, Deserialize)]
+pub struct Repository {
     url: String,
     prefix: String,
     summary_extension: Option<String>,
 }
 
+/*
+ * Struct used for deserializing from the TOML configuration file, this is
+ * parsed into Config for use throughout the program.
+ */
+#[derive(Clone, Debug, Deserialize)]
+struct ConfigFile {
+    default_prefix: Option<String>,
+    verbose: Option<bool>,
+    repository: Option<Vec<Repository>>,
+}
+
 impl Config {
-    pub fn set_config_from_cmdline(&mut self, argv: &OptArgs) {
-        if argv.prefix.is_some() {
-            self.prefix = argv.prefix.clone().unwrap();
-        }
-        if argv.verbose {
-            self.verbose = true;
-        }
-    }
-
-    pub fn repositories(&self) -> &Option<Vec<RepoConfig>> {
-        &self.file.repository
-    }
-
     pub fn prefix(&self) -> &str {
         &self.prefix
+    }
+
+    pub fn prefixmap(&self) -> &HashMap<String, Vec<Repository>> {
+        &self.prefixmap
     }
 
     pub fn verbose(&self) -> bool {
@@ -73,37 +68,69 @@ impl Config {
     }
 
     pub fn load(argv: &OptArgs) -> Result<Config, std::io::Error> {
-        let config_file: PathBuf = if argv.config.is_some() {
+        /*
+         * Load user-specific configuration file otherwise the default.
+         */
+        let cfgfilename: PathBuf = if argv.config.is_some() {
             PathBuf::from(argv.config.clone().unwrap().as_str())
         } else {
             dirs::config_dir().unwrap().join("pm.toml")
         };
-
-        if !config_file.exists() {
+        if !cfgfilename.exists() {
             eprintln!(
                 "ERROR: Configuration file {} does not exist",
-                config_file.display()
+                cfgfilename.display()
             );
             std::process::exit(1);
         }
 
-        let config_str: String = fs::read_to_string(&config_file)?;
-        let cfg: ConfigFile = toml::from_str(&config_str).unwrap();
-        let mut default_prefix;
-        if let Some(p) = &cfg.default_prefix() {
-            default_prefix = p.to_string();
-        } else if let Some(p) = &cfg.default_repo_prefix() {
-            default_prefix = p.to_string()
+        let cfgfile: ConfigFile =
+            toml::from_str(&fs::read_to_string(&cfgfilename)?).unwrap();
+
+        let mut prefix;
+        if let Some(p) = &argv.prefix {
+            prefix = p.to_string();
+        } else if let Some(p) = &cfgfile.default_prefix() {
+            prefix = p.to_string();
+        } else if let Some(p) = &cfgfile.default_repo_prefix() {
+            prefix = p.to_string()
         } else {
             eprintln!("ERROR: No repositories specified");
             std::process::exit(1);
         }
-        let default_verbose = cfg.verbose.unwrap_or(false);
+
+        /*
+         * Validate and insert configured repositories into a HashMap
+         * indexed by prefix.
+         */
+        let mut prefixmap: HashMap<String, Vec<Repository>> = HashMap::new();
+        if let Some(repos) = &cfgfile.repositories() {
+            for repo in repos {
+                let pkg_info = format!("{}/sbin/pkg_info", &repo.prefix());
+                let pkg_info = PathBuf::from(pkg_info);
+                if !pkg_info.exists() {
+                    eprintln!(
+                        "WARNING: No pkg_install found under {}, skipping",
+                        &repo.prefix()
+                    );
+                    continue;
+                }
+                if let Some(r) = prefixmap.get_mut(&repo.prefix().to_string()) {
+                    r.push(repo.clone());
+                } else {
+                    prefixmap
+                        .insert(repo.prefix().to_string(), vec![repo.clone()]);
+                }
+            }
+        }
+
+        let verbose = argv.verbose || cfgfile.verbose.unwrap_or(false);
+
         Ok(Config {
-            file: cfg,
-            filename: config_file,
-            prefix: default_prefix,
-            verbose: default_verbose,
+            filename: cfgfilename,
+            prefix,
+            prefixmap,
+            verbose,
         })
     }
 }
@@ -119,9 +146,13 @@ impl ConfigFile {
             None => None,
         }
     }
+
+    pub fn repositories(&self) -> &Option<Vec<Repository>> {
+        &self.repository
+    }
 }
 
-impl RepoConfig {
+impl Repository {
     pub fn url(&self) -> &String {
         &self.url
     }
