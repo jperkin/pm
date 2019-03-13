@@ -22,7 +22,6 @@ use std::io::Write;
 pub struct SummaryStream {
     buf: Vec<u8>,
     entries: Vec<SummaryEntry>,
-    cur: usize,
 }
 
 /*
@@ -283,7 +282,6 @@ impl SummaryStream {
         SummaryStream {
             buf: vec![],
             entries: vec![],
-            cur: 0,
         }
     }
 
@@ -317,18 +315,52 @@ impl SummaryStream {
     pub fn entries_mut(&mut self) -> &mut Vec<SummaryEntry> {
         &mut self.entries
     }
+}
 
-    pub fn parse(&mut self) {
-        let allsum = match std::str::from_utf8(&self.buf) {
-            Ok(s) => s,
-            _ => panic!("Err parse"),
+impl Write for SummaryStream {
+    /*
+     * Stream from our input buffer into SummaryEntry records.
+     *
+     * There is probably a better way to handle this buffer, there's quite a
+     * bit of copying/draining going on.  Some kind of circular buffer might be
+     * a better option.
+     */
+    fn write(&mut self, input: &[u8]) -> std::io::Result<usize> {
+        /*
+         * Save the incoming buffer on to the end of any buffer we may already
+         * be processing.
+         */
+        self.buf.extend_from_slice(input);
+
+        /*
+         * Look for the last complete pkg_summary(5) record, if there are none
+         * then go to the next input.
+         */
+        let input_string = match std::str::from_utf8(&self.buf) {
+            Ok(s) => {
+                if let Some(last) = s.rfind("\n\n") {
+                    s.get(0..last + 2).unwrap()
+                } else {
+                    return Ok(input.len());
+                }
+            }
+            _ => panic!("ERROR: Invalid pkg_summary(5) stream"),
         };
-        let v: Vec<&str> = allsum.split_terminator("\n\n").collect();
-        for sum_entry in v {
+
+        /*
+         * We have at least one complete record, parse it and add to the vector
+         * of summary entries.
+         */
+        for sum_entry in input_string.split_terminator("\n\n") {
             let mut sum = SummaryEntry::new();
             for line in sum_entry.lines() {
-                let kv: Vec<&str> = line.splitn(2, '=').collect();
-                match sum.parse_entry(kv[0], kv[1]) {
+                let v: Vec<&str> = line.splitn(2, '=').collect();
+                let key = v.get(0);
+                let val = v.get(1);
+                if key.is_none() || val.is_none() {
+                    panic!("ERROR: Invalid pkg_summary(5) line");
+                }
+                match sum.parse_entry(key.unwrap(), val.unwrap()) {
                     Ok(_) => {}
                     Err(err) => {
                         println!("PARSE ERROR: {}", err);
@@ -346,24 +378,16 @@ impl SummaryStream {
                 }
             }
         }
-    }
-}
 
-impl Write for SummaryStream {
-    /*
-     * For now we just buffer the whole thing into memory and then process
-     * it at the end.  A 20,000 package uncompressed pkg_summary is in the
-     * region of 25MB, which is fine, and it makes everything a lot simpler
-     * and (possibly) faster.
-     *
-     * If we want to move to a streaming model in the future then we'll need
-     * to account for incomplete records and split on "\n\n" records, as well
-     * as figuring out a way to differentiate between EOF and a record that
-     * happens to end at the end of a buffer.
-     */
-    fn write(&mut self, inbuf: &[u8]) -> std::io::Result<usize> {
-        self.buf.extend_from_slice(inbuf);
-        Ok(inbuf.len())
+        /*
+         * What we really want is some way to just move forward the beginning
+         * of the vector, but there appears to be no way to do that, so we end
+         * up having to do something with the existing data.  This seems to be
+         * the best way to do it for now?
+         */
+        self.buf = self.buf.split_off(input_string.len());
+
+        Ok(input.len())
     }
 
     fn flush(&mut self) -> std::io::Result<()> {

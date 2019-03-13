@@ -22,6 +22,7 @@ use crate::config;
 use crate::pmdb::PMDB;
 use crate::summary::SummaryStream;
 use std::fs;
+use std::io::BufReader;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::str;
@@ -58,10 +59,9 @@ fn get_local_packages(
         .stdout(Stdio::piped())
         .spawn()
         .expect("could not spawn pkg_info");
-    let mut reader = std::io::BufReader::new(pinfo.stdout.expect("fail"));
+    let mut reader = BufReader::new(pinfo.stdout.expect("fail"));
     let mut pinfostr = SummaryStream::new();
     std::io::copy(&mut reader, &mut pinfostr)?;
-    pinfostr.parse();
     /*
      * Look for "automatic" packages (those that have been pulled in as a
      * dependency).  This is a bit hacky, and relies upon the fact that
@@ -173,7 +173,6 @@ fn update_remote_repository(
             } else {
                 println!("Updating {}", repo.url());
                 sumstr.slurp(&e, res)?;
-                sumstr.parse();
                 db.update_remote_repository(
                     repo.url(),
                     last_modified,
@@ -184,7 +183,6 @@ fn update_remote_repository(
         } else {
             println!("Creating {}", repo.url());
             sumstr.slurp(&e, res)?;
-            sumstr.parse();
             db.insert_remote_repository(
                 repo.url(),
                 repo.prefix(),
