@@ -63,6 +63,7 @@ impl Config {
         &self.prefixmap
     }
 
+    #[allow(dead_code)]
     pub fn verbose(&self) -> bool {
         self.verbose
     }
