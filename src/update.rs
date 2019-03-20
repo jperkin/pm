@@ -46,15 +46,9 @@ fn get_summary_extensions(repo: &config::Repository) -> Vec<&str> {
  * Get Vec of packages installed under the chosen prefix.
  */
 fn get_local_packages(
-    prefix: &str,
-    pkgdb: &str,
+    prefix: &config::Prefix,
 ) -> Result<SummaryStream, Box<std::error::Error>> {
-    /*
-     * Update local pkg repository if necessary.
-     */
-    let pkg_info = format!("{}/sbin/pkg_info", prefix);
-    let pkg_info = PathBuf::from(pkg_info);
-    let pinfo = Command::new(pkg_info.as_path())
+    let pinfo = Command::new(prefix.pkg_info())
         .args(&["-X", "-a"])
         .stdout(Stdio::piped())
         .spawn()
@@ -68,7 +62,8 @@ fn get_local_packages(
      * pkg_install only uses this file for automatic=yes right now.
      */
     for pkg in pinfostr.entries_mut() {
-        let autofile = format!("{}/{}/+INSTALLED_INFO", pkgdb, pkg.pkgname());
+        let autofile =
+            format!("{}/{}/+INSTALLED_INFO", prefix.pkgdb(), pkg.pkgname());
         let autofile = PathBuf::from(autofile);
         if autofile.exists() {
             pkg.set_automatic();
@@ -78,50 +73,37 @@ fn get_local_packages(
 }
 
 fn update_local_repository(
-    prefix: &str,
+    prefix: &config::Prefix,
     db: &mut PMDB,
 ) -> Result<(), Box<std::error::Error>> {
     /*
-     * Calculate PKG_DBDIR from pkg_admin(1) then get its last modified time
-     * to see if we need to refresh the local package database.
-     *
-     * XXX: This could probably be cleaner?
+     * Get the last modified time of the pkgdb to see if we need to refresh
+     * the local package database for this prefix.
      */
-    let pkg_admin = format!("{}/sbin/pkg_admin", prefix);
-    let pkg_admin = PathBuf::from(pkg_admin);
-    if !pkg_admin.exists() {
-        eprintln!("ERROR: No pkg_install found under {}", prefix);
-        std::process::exit(1);
-    }
-    let pkgdb = Command::new(pkg_admin.as_path())
-        .args(&["config-var", "PKG_DBDIR"])
-        .output()
-        .expect("could not execute pkg_admin");
-    let pkgdb_dir = str::from_utf8(&pkgdb.stdout).unwrap().trim();
-    let pkgdb_mtime = fs::metadata(&pkgdb_dir)?
+    let pkgdb_mtime = fs::metadata(prefix.pkgdb())?
         .modified()?
         .duration_since(SystemTime::UNIX_EPOCH)?;
     let pkgdb_mtime_sec = pkgdb_mtime.as_secs() as i64;
     let pkgdb_mtime_nsec = pkgdb_mtime.subsec_nanos() as i32;
 
-    if let Some(r) = db.get_local_repository(prefix)? {
+    if let Some(r) = db.get_local_repository(prefix.path())? {
         if r.up_to_date(pkgdb_mtime_sec, pkgdb_mtime_nsec) {
             return Ok(());
         } else {
-            println!("Refreshing packages installed under {}", prefix);
-            let pkgs: SummaryStream = get_local_packages(&prefix, &pkgdb_dir)?;
+            println!("Refreshing packages installed under {}", prefix.path());
+            let pkgs: SummaryStream = get_local_packages(&prefix)?;
             db.update_local_repository(
-                prefix,
+                prefix.path(),
                 pkgdb_mtime_sec,
                 pkgdb_mtime_nsec,
                 pkgs.entries(),
             )?;
         }
     } else {
-        println!("Recording packages installed under {}", prefix);
-        let pkgs: SummaryStream = get_local_packages(&prefix, &pkgdb_dir)?;
+        println!("Recording packages installed under {}", prefix.path());
+        let pkgs: SummaryStream = get_local_packages(&prefix)?;
         db.insert_local_repository(
-            prefix,
+            prefix.path(),
             pkgdb_mtime_sec,
             pkgdb_mtime_nsec,
             pkgs.entries(),
@@ -132,6 +114,7 @@ fn update_local_repository(
 }
 
 fn update_remote_repository(
+    prefix: &str,
     repo: &config::Repository,
     db: &mut PMDB,
 ) -> Result<(), Box<std::error::Error>> {
@@ -185,7 +168,7 @@ fn update_remote_repository(
             sumstr.slurp(&e, res)?;
             db.insert_remote_repository(
                 repo.url(),
-                repo.prefix(),
+                prefix,
                 last_modified,
                 e,
                 sumstr.entries(),
@@ -202,10 +185,12 @@ pub fn run(
     cfg: &config::Config,
     db: &mut PMDB,
 ) -> Result<(), Box<std::error::Error>> {
-    for (prefix, repos) in cfg.prefixmap() {
-        update_local_repository(prefix, db)?;
-        for repo in repos {
-            update_remote_repository(repo, db)?;
+    for prefix in cfg.prefixes() {
+        update_local_repository(&prefix, db)?;
+        if let Some(repos) = prefix.repositories() {
+            for repo in repos {
+                update_remote_repository(prefix.path(), repo, db)?;
+            }
         }
     }
 

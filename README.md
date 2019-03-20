@@ -70,44 +70,58 @@ default_prefix = "/opt/local"
 verbose = true
 
 #
-# A configured repository.
+# A fully-configured prefix.
 #
-#   * "url" and "prefix" are mandatory.
+#   * "path" is mandatory.
+#   * "pkg_admin", "pkg_info", and "pkgdb" are optional, and will be calculated
+#     during initialisation if not specified.
+#
+[[prefix]]
+  path = "/opt/local"
+  pkg_admin = "/opt/local/sbin/pkg_admin"
+  pkg_info = "/opt/local/sbin/pkg_info"
+  pkgdb = "/opt/local/pkg"
+#
+# A remote binary package repository for /opt/local.
+#
+#   * "url" is mandatory
 #   * "summary_extension" is optional, and overrides the default set of
-#     pkg_summary extensions to search ("xz", "bz2", "gz").
+#     pkg_summary extensions to search for ("xz", "bz2", "gz").
 #
-[[repository]]
-url = "https://pkgsrc.joyent.com/packages/SmartOS/trunk/x86_64/All"
-prefix = "/opt/local"
-summary_extension = "gz"
+  [[prefix.repository]]
+    url = "https://pkgsrc.joyent.com/packages/SmartOS/trunk/x86_64/All"
+    summary_extension = "gz"
 
 #
-# Another configured repository.  Obviously these two repositories are
-# incompatible and bad things would happen in real life, but they are
-# shown to provide an example.
+# A second prefix using just the bare minimum, everything else is deduced at
+# startup (at a small cost to runtime).
 #
-[[repository]]
-url = "https://pkgsrc.joyent.com/packages/Darwin/trunk/x86_64/All"
-prefix = "/opt/pkg"
+[[prefix]]
+  path = "/opt/tools"
+  [[prefix.repository]]
+    url = "https://pkgsrc.joyent.com/packages/SmartOS/trunk/tools/All"
 ```
 
-With the two incompatible prefixes configured above, you can still perform
-query commands on them:
+With the two prefixes configured above, you can perform queries on them:
 
 ```console
 $ pm up
+Recording packages installed under /opt/local
 Creating https://pkgsrc.joyent.com/packages/SmartOS/trunk/x86_64/All
-Creating https://pkgsrc.joyent.com/packages/Darwin/trunk/x86_64/All
+Recording packages installed under /opt/tools
+Creating https://pkgsrc.joyent.com/packages/SmartOS/trunk/tools/All
 
 : Using the default prefix
 $ pm avail | wc -l
-   20288
+   20305
+$ pm list | wc -l
+     118
 $ pm search ^vim-[0-9]
-vim-8.1.0800         Vim editor (vi clone) without GUI
+vim-8.1.1004         Vim editor (vi clone) without GUI
 
 : Specifying the alternate prefix
-$ pm -p /opt/pkg avail | wc -l
-   18579
-$ pm -p /opt/pkg search ^vim-[0-9]
-vim-8.1.0390         Vim editor (vi clone) without GUI
+$ pm -p /opt/tools avail | wc -l
+     694
+$ pm -p /opt/tools list | wc -l
+      21
 ```
