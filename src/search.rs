@@ -31,7 +31,7 @@ pub fn run(
      */
     let refmt = format!("(?i){}", regstr);
     let re = Regex::new(&refmt).unwrap();
-    let pkgs = db.get_remote_pkgs_by_prefix(cfg.prefix())?;
+    let pkgs = db.get_remote_pkglist_by_prefix(cfg.prefix())?;
     if pkgs.is_empty() {
         eprintln!("No packages available for prefix={}", cfg.prefix());
         std::process::exit(1);

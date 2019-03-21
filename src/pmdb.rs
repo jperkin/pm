@@ -18,7 +18,7 @@
 
 extern crate rusqlite;
 
-use crate::list::ListPackage;
+use crate::list::PackageList;
 use crate::summary::SummaryEntry;
 use rusqlite::Connection;
 use std::fs;
@@ -696,10 +696,10 @@ impl PMDB {
     /*
      * Support functions for "avail" and "list".
      */
-    pub fn get_local_pkgs_by_prefix(
+    pub fn get_local_pkglist_by_prefix(
         &mut self,
         prefix: &str,
-    ) -> rusqlite::Result<Vec<ListPackage>> {
+    ) -> rusqlite::Result<Vec<PackageList>> {
         let mut result = Vec::new();
         let mut stmt = self.db.prepare(
             "
@@ -711,19 +711,20 @@ impl PMDB {
               ORDER BY pkgname ASC",
         )?;
         let rows =
-            stmt.query_map_named(&[(":prefix", &prefix)], |row| ListPackage {
+            stmt.query_map_named(&[(":prefix", &prefix)], |row| PackageList {
                 pkgname: row.get(0),
                 comment: row.get(1),
+                ..Default::default()
             })?;
         for row in rows {
             result.push(row?)
         }
         Ok(result)
     }
-    pub fn get_remote_pkgs_by_prefix(
+    pub fn get_remote_pkglist_by_prefix(
         &mut self,
         prefix: &str,
-    ) -> rusqlite::Result<Vec<ListPackage>> {
+    ) -> rusqlite::Result<Vec<PackageList>> {
         let mut result = Vec::new();
         let mut stmt = self.db.prepare(
             "
@@ -735,9 +736,10 @@ impl PMDB {
               ORDER BY pkgname ASC",
         )?;
         let rows =
-            stmt.query_map_named(&[(":prefix", &prefix)], |row| ListPackage {
+            stmt.query_map_named(&[(":prefix", &prefix)], |row| PackageList {
                 pkgname: row.get(0),
                 comment: row.get(1),
+                ..Default::default()
             })?;
         for row in rows {
             result.push(row?)
