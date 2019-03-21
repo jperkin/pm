@@ -46,7 +46,7 @@ pub struct RemoteRepository {
 }
 
 #[cfg_attr(feature = "cargo-clippy", allow(clippy::unreadable_literal))]
-const DB_VERSION: i64 = 20190305;
+const DB_VERSION: i64 = 20190321;
 
 impl PMDB {
     /*
@@ -67,6 +67,7 @@ impl PMDB {
         db.execute("PRAGMA synchronous = EXTRA;", rusqlite::NO_PARAMS)?;
 
         if !PMDB::is_created(&db)? {
+            PMDB::drop_default_tables(&mut db)?;
             PMDB::create_default_tables(&mut db)?;
         } else if !PMDB::is_current(&db)? {
             PMDB::drop_default_tables(&mut db)?;
@@ -183,6 +184,7 @@ impl PMDB {
                 categories          TEXT NOT NULL,
                 comment             TEXT NOT NULL,
                 description         TEXT NOT NULL,
+                file_name           TEXT,
                 file_size           INTEGER NOT NULL,
                 homepage            TEXT,
                 license             TEXT,
@@ -241,7 +243,15 @@ impl PMDB {
             DROP TABLE IF EXISTS local_repository;
             DROP TABLE IF EXISTS remote_repository;
             DROP TABLE IF EXISTS local_pkg;
+            DROP TABLE IF EXISTS local_conflicts;
+            DROP TABLE IF EXISTS local_depends;
+            DROP TABLE IF EXISTS local_provides;
+            DROP TABLE IF EXISTS local_requires;
             DROP TABLE IF EXISTS remote_pkg;
+            DROP TABLE IF EXISTS remote_conflicts;
+            DROP TABLE IF EXISTS remote_depends;
+            DROP TABLE IF EXISTS remote_provides;
+            DROP TABLE IF EXISTS remote_requires;
         ",
         )?;
         tx.commit()
@@ -404,13 +414,13 @@ impl PMDB {
         let mut insert_pkg = tx.prepare(
             "INSERT INTO remote_pkg
                     (repository_id, build_date, categories, comment,
-                     description, file_size, homepage, license, opsys,
-                     os_version, pkg_options, pkgbase, pkgname, pkgpath,
-                     pkgtools_version, pkgversion, size_pkg)
+                     description, file_name, file_size, homepage, license,
+                     opsys, os_version, pkg_options, pkgbase, pkgname,
+                     pkgpath, pkgtools_version, pkgversion, size_pkg)
              VALUES (:repository_id, :build_date, :categories, :comment,
-                     :description, :file_size, :homepage, :license, :opsys,
-                     :os_version, :pkg_options, :pkgbase, :pkgname, :pkgpath,
-                     :pkgtools_version, :pkgversion, :size_pkg)",
+                     :description, :file_name, :file_size, :homepage, :license,
+                     :opsys, :os_version, :pkg_options, :pkgbase, :pkgname,
+                     :pkgpath, :pkgtools_version, :pkgversion, :size_pkg)",
         )?;
         let mut insert_conflicts = tx.prepare(
             "INSERT INTO remote_conflicts
@@ -444,6 +454,7 @@ impl PMDB {
                 (":categories", &p.categories().join(" ")),
                 (":comment", &p.comment()),
                 (":description", &p.description().join("\n")),
+                (":file_name", &(p.file_name())),
                 (":file_size", &(p.file_size())),
                 (":homepage", &p.homepage()),
                 (":license", &p.license()),

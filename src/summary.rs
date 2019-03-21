@@ -97,7 +97,6 @@ impl SummaryEntry {
             None => "",
         }
     }
-    #[allow(dead_code)]
     pub fn file_name(&self) -> &str {
         match &self.file_name {
             Some(s) => s.as_str(),
