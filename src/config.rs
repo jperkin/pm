@@ -22,9 +22,6 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 
-extern crate dirs;
-extern crate toml;
-
 /*
  * Parsed configuration file.
  */
