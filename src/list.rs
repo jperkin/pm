@@ -28,7 +28,7 @@ pub struct ListPackage {
 pub fn avail(
     cfg: &config::Config,
     db: &mut PMDB,
-) -> Result<(), Box<std::error::Error>> {
+) -> Result<(), Box<dyn std::error::Error>> {
     let pkgs = db.get_remote_pkgs_by_prefix(cfg.prefix())?;
     if pkgs.is_empty() {
         eprintln!("No packages available for prefix={}", cfg.prefix());
@@ -43,7 +43,7 @@ pub fn avail(
 pub fn list(
     cfg: &config::Config,
     db: &mut PMDB,
-) -> Result<(), Box<std::error::Error>> {
+) -> Result<(), Box<dyn std::error::Error>> {
     let pkgs = db.get_local_pkgs_by_prefix(cfg.prefix())?;
     if pkgs.is_empty() {
         eprintln!("No packages recorded under {}", cfg.prefix());

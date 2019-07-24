@@ -385,7 +385,8 @@ impl Write for SummaryStream {
          * up having to do something with the existing data.  This seems to be
          * the best way to do it for now?
          */
-        self.buf = self.buf.split_off(input_string.len());
+        let len = input_string.len();
+        self.buf = self.buf.split_off(len);
 
         Ok(input.len())
     }

@@ -16,8 +16,6 @@
  * update.rs - handle "pm update" command.
  */
 
-extern crate reqwest;
-
 use crate::config;
 use crate::pmdb::PMDB;
 use crate::summary::SummaryStream;
@@ -47,7 +45,7 @@ fn get_summary_extensions(repo: &config::Repository) -> Vec<&str> {
  */
 fn get_local_packages(
     prefix: &config::Prefix,
-) -> Result<SummaryStream, Box<std::error::Error>> {
+) -> Result<SummaryStream, Box<dyn std::error::Error>> {
     let pinfo = Command::new(prefix.pkg_info())
         .args(&["-X", "-a"])
         .stdout(Stdio::piped())
@@ -75,7 +73,7 @@ fn get_local_packages(
 fn update_local_repository(
     prefix: &config::Prefix,
     db: &mut PMDB,
-) -> Result<(), Box<std::error::Error>> {
+) -> Result<(), Box<dyn std::error::Error>> {
     /*
      * Get the last modified time of the pkgdb to see if we need to refresh
      * the local package database for this prefix.
@@ -117,7 +115,7 @@ fn update_remote_repository(
     prefix: &str,
     repo: &config::Repository,
     db: &mut PMDB,
-) -> Result<(), Box<std::error::Error>> {
+) -> Result<(), Box<dyn std::error::Error>> {
     let client = reqwest::Client::new();
 
     let summary_extensions = get_summary_extensions(&repo);
@@ -184,7 +182,7 @@ fn update_remote_repository(
 pub fn run(
     cfg: &config::Config,
     db: &mut PMDB,
-) -> Result<(), Box<std::error::Error>> {
+) -> Result<(), Box<dyn std::error::Error>> {
     for prefix in cfg.prefixes() {
         update_local_repository(&prefix, db)?;
         if let Some(repos) = prefix.repositories() {

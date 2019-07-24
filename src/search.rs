@@ -24,7 +24,7 @@ pub fn run(
     cfg: &config::Config,
     db: &mut PMDB,
     regstr: &str,
-) -> Result<(), Box<std::error::Error>> {
+) -> Result<(), Box<dyn std::error::Error>> {
     /*
      * For now we force case-insensitive matches by default (to avoid the
      * "ImageMagick" problem), but this should really go into search flags.

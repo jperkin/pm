@@ -23,15 +23,6 @@ mod search;
 mod summary;
 mod update;
 
-extern crate bzip2;
-extern crate chrono;
-extern crate flate2;
-extern crate httpdate;
-extern crate regex;
-extern crate rusqlite;
-extern crate structopt;
-extern crate xz2;
-
 use crate::pmdb::PMDB;
 use structopt::StructOpt;
 
@@ -86,7 +77,7 @@ enum SubCmd {
     Update,
 }
 
-fn main() -> Result<(), Box<std::error::Error>> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cmd = OptArgs::from_args();
 
     /* Pass cmd so that the user can override the default with -c */
