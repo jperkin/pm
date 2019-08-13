@@ -20,7 +20,7 @@ extern crate reqwest;
 
 use crate::config;
 use crate::pmdb::PMDB;
-use crate::summary::SummaryStream;
+use pkgsrc::summary::SummaryStream;
 use std::fs;
 use std::io::BufReader;
 use std::path::PathBuf;
@@ -155,7 +155,18 @@ fn update_remote_repository(
                 println!("{} is up to date", repo.url());
             } else {
                 println!("Updating {}", repo.url());
-                sumstr.slurp(&e, res)?;
+                if e == "xz" {
+                    let mut decomp = xz2::read::XzDecoder::new(res);
+                    std::io::copy(&mut decomp, &mut sumstr);
+                } else if e == "bz2" {
+                    let mut decomp = bzip2::read::BzDecoder::new(res);
+                    std::io::copy(&mut decomp, &mut sumstr);
+                } else if e == "gz" {
+                    let mut decomp = flate2::read::GzDecoder::new(res);
+                    std::io::copy(&mut decomp, &mut sumstr);
+                } else {
+                    panic!("Unsupported summary_extension");
+                }
                 db.update_remote_repository(
                     repo.url(),
                     last_modified,
@@ -165,7 +176,18 @@ fn update_remote_repository(
             }
         } else {
             println!("Creating {}", repo.url());
-            sumstr.slurp(&e, res)?;
+            if e == "xz" {
+                let mut decomp = xz2::read::XzDecoder::new(res);
+                std::io::copy(&mut decomp, &mut sumstr);
+            } else if e == "bz2" {
+                let mut decomp = bzip2::read::BzDecoder::new(res);
+                std::io::copy(&mut decomp, &mut sumstr);
+            } else if e == "gz" {
+                let mut decomp = flate2::read::GzDecoder::new(res);
+                std::io::copy(&mut decomp, &mut sumstr);
+            } else {
+                panic!("Unsupported summary_extension");
+            }
             db.insert_remote_repository(
                 repo.url(),
                 prefix,

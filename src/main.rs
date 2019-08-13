@@ -20,7 +20,6 @@ mod config;
 mod list;
 mod pmdb;
 mod search;
-mod summary;
 mod update;
 
 extern crate bzip2;

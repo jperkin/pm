@@ -19,7 +19,7 @@
 extern crate rusqlite;
 
 use crate::list::PackageList;
-use crate::summary::SummaryEntry;
+use pkgsrc::summary::SummaryEntry;
 use rusqlite::Connection;
 use std::fs;
 
