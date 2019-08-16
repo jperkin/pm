@@ -20,7 +20,7 @@ extern crate reqwest;
 
 use crate::config;
 use crate::pmdb::PMDB;
-use pkgsrc::summary::SummaryStream;
+use pkgsrc::SummaryStream;
 use std::fs;
 use std::io::BufReader;
 use std::path::PathBuf;

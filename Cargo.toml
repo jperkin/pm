@@ -1,6 +1,6 @@
 [package]
 name = "pm"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Jonathan Perkin <jonathan@perkin.org.uk>"]
 edition = "2018"
 
@@ -11,8 +11,9 @@ dirs = "*"
 filetime = "*"
 flate2 = "*"
 getopts = "*"
+glob = "*"
 httpdate = "*"
-pkgsrc = "0.1.1"
+pkgsrc = "*"
 regex = "*"
 reqwest = "*"
 rusqlite = "*"

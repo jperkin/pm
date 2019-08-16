@@ -28,7 +28,7 @@ use crate::pmdb::PMDB;
  * derive from Default and ensure all entries are set to default values and
  * it is up to callers to use the correct information.
  */
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct PackageList {
     pub id: i64,
     pub repository_id: i64,

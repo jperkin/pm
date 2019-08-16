@@ -19,7 +19,7 @@
 extern crate rusqlite;
 
 use crate::list::PackageList;
-use pkgsrc::summary::SummaryEntry;
+use pkgsrc::SummaryEntry;
 use rusqlite::Connection;
 use std::fs;
 
@@ -267,13 +267,12 @@ impl PMDB {
               WHERE prefix = :prefix",
         )?;
         let mut rows = stmt.query_named(&[(":prefix", &prefix)])?;
-        match rows.next() {
+        match rows.next()? {
             Some(row) => {
-                let row = row?;
                 Ok(Some(LocalRepository {
                     prefix: prefix.to_string(),
-                    mtime: row.get(0),
-                    ntime: row.get(1),
+                    mtime: row.get(0)?,
+                    ntime: row.get(1)?,
                     need_update: false,
                 }))
             }
@@ -291,13 +290,12 @@ impl PMDB {
               WHERE url = :url",
         )?;
         let mut rows = stmt.query_named(&[(":url", &url)])?;
-        match rows.next() {
+        match rows.next()? {
             Some(row) => {
-                let row = row?;
                 Ok(Some(RemoteRepository {
                     url: url.to_string(),
-                    mtime: row.get(0),
-                    summary_suffix: row.get(1),
+                    mtime: row.get(0)?,
+                    summary_suffix: row.get(1)?,
                     need_update: false,
                 }))
             }
@@ -711,11 +709,11 @@ impl PMDB {
               ORDER BY pkgname ASC",
         )?;
         let rows =
-            stmt.query_map_named(&[(":prefix", &prefix)], |row| PackageList {
-                pkgname: row.get(0),
-                comment: row.get(1),
+            stmt.query_map_named(&[(":prefix", &prefix)], |row| Ok(PackageList {
+                comment: row.get(0)?,
+                pkgname: row.get(1)?,
                 ..Default::default()
-            })?;
+            }))?;
         for row in rows {
             result.push(row?)
         }
@@ -736,11 +734,11 @@ impl PMDB {
               ORDER BY pkgname ASC",
         )?;
         let rows =
-            stmt.query_map_named(&[(":prefix", &prefix)], |row| PackageList {
-                pkgname: row.get(0),
-                comment: row.get(1),
+            stmt.query_map_named(&[(":prefix", &prefix)], |row| Ok(PackageList {
+                pkgname: row.get(0)?,
+                comment: row.get(1)?,
                 ..Default::default()
-            })?;
+            }))?;
         for row in rows {
             result.push(row?)
         }
